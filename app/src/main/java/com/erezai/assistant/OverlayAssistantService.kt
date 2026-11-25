@@ -39,6 +39,11 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             } else if (intent?.action == VoiceAssistantService.ACTION_TRANSCRIPT) {
                 val transcript = intent.getStringExtra(VoiceAssistantService.EXTRA_TRANSCRIPT).orEmpty()
                 if (transcript.isNotBlank()) latestAudioText = (latestAudioText + "\n" + transcript).takeLast(2500)
+            } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_STOPPED) {
+                latestText = ""
+                latestScreenImagePath = ""
+                latestScreenFramePaths = emptyList()
+                statusText?.text = "שיתוף המסך נעצר."
             } else {
                 latestText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
                     ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
@@ -59,6 +64,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
             addAction(VoiceAssistantService.ACTION_RECOGNIZED)
             addAction(VoiceAssistantService.ACTION_TRANSCRIPT)
+            addAction(ScreenCaptureService.ACTION_SCREEN_STOPPED)
         }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(textReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(textReceiver, filter)
