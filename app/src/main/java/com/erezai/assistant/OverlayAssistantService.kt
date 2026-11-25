@@ -42,7 +42,9 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private val textReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
-            if (intent?.action == VoiceAssistantService.ACTION_RECOGNIZED) {
+            if (intent?.action == VoiceAssistantService.ACTION_WAKE_HEARD) {
+                speak("כן, אני שומע. מה תרצה שאעשה?")
+            } else if (intent?.action == VoiceAssistantService.ACTION_RECOGNIZED) {
                 intent.getStringExtra(VoiceAssistantService.EXTRA_COMMAND)?.let { runCommand(it) }
             } else if (intent?.action == VoiceAssistantService.ACTION_TRANSCRIPT) {
                 val transcript = intent.getStringExtra(VoiceAssistantService.EXTRA_TRANSCRIPT).orEmpty()
@@ -71,6 +73,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             addAction(ScreenCaptureService.ACTION_SCREEN_TEXT)
             addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
             addAction(VoiceAssistantService.ACTION_RECOGNIZED)
+            addAction(VoiceAssistantService.ACTION_WAKE_HEARD)
             addAction(VoiceAssistantService.ACTION_TRANSCRIPT)
             addAction(ScreenCaptureService.ACTION_SCREEN_STOPPED)
         }
@@ -87,6 +90,15 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale("he", "IL")
+            // Prefer an installed Hebrew male voice when the Android TTS engine exposes one.
+            val hebrewMale = tts?.voices?.firstOrNull { voice ->
+                voice.locale.language == "he" &&
+                    (voice.name.contains("male", ignoreCase = true) || voice.name.contains("masculine", ignoreCase = true))
+            }
+            if (hebrewMale != null) tts?.voice = hebrewMale
+            // Lower pitch gives a less shrill voice when the engine has no explicit male Hebrew voice.
+            tts?.setPitch(0.82f)
+            tts?.setSpeechRate(0.94f)
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_PAUSE) }
                 override fun onDone(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_RESUME) }
