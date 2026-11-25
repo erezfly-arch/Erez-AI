@@ -54,6 +54,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     latestAudioText = (latestAudioText + "\n" + transcript).takeLast(2500)
                     statusText?.text = "זיהוי קולי: $transcript"
                 }
+            } else if (intent?.action == VoiceAssistantService.ACTION_STATUS) {
+                statusText?.text = intent.getStringExtra(VoiceAssistantService.EXTRA_STATUS).orEmpty()
             } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_STOPPED) {
                 latestText = ""
                 latestScreenImagePath = ""
@@ -80,6 +82,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             addAction(VoiceAssistantService.ACTION_RECOGNIZED)
             addAction(VoiceAssistantService.ACTION_WAKE_HEARD)
             addAction(VoiceAssistantService.ACTION_TRANSCRIPT)
+            addAction(VoiceAssistantService.ACTION_STATUS)
             addAction(ScreenCaptureService.ACTION_SCREEN_STOPPED)
         }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(textReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
