@@ -1,6 +1,7 @@
 package com.erezai.assistant
 
 import android.app.*
+import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
@@ -32,6 +33,7 @@ class ScreenCaptureService : Service() {
         const val EXTRA_SCREEN_TEXT = "screen_text"
         const val EXTRA_SCREEN_IMAGE_PATH = "screen_image_path"
         const val EXTRA_SCREEN_FRAME_PATHS = "screen_frame_paths"
+        const val ACTION_STOP = "com.erezai.assistant.screen.STOP"
         private const val FRAME_INTERVAL_MS = 1200L
     }
 
@@ -52,16 +54,26 @@ class ScreenCaptureService : Service() {
     @Volatile private var lastFrameAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         val channel = "erez_screen_capture"
         if (Build.VERSION.SDK_INT >= 26) {
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel(channel, "שיתוף מסך פעיל", NotificationManager.IMPORTANCE_LOW))
         }
+        val stopIntent = PendingIntent.getService(
+            this, 71, Intent(this, ScreenCaptureService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0
+        )
         startForeground(71, NotificationCompat.Builder(this, channel)
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle("ארז AI פעיל")
             .setContentText("ניתוח מסך ותמונות פעיל לבקשתך")
-            .setOngoing(true).build())
+            .setOngoing(true)
+            .addAction(android.R.drawable.ic_media_pause, "עצור שיתוף מסך", stopIntent)
+            .build())
 
         if (projection != null) return START_NOT_STICKY
         val resultCode = intent?.getIntExtra("resultCode", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
