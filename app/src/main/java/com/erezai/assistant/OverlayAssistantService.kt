@@ -169,28 +169,23 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 }
             }
             command.contains("וואטסאפ") || command.contains("WhatsApp", true) -> {
-                val share = Intent(Intent.ACTION_SEND).setType("text/plain")
-                    .putExtra(Intent.EXTRA_TEXT, command.substringAfter("שלח", command))
-                share.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                try { startActivity(share.setPackage("com.whatsapp")) }
-                catch (_: Exception) { startActivity(Intent.createChooser(share, "שליחה").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                speak("פתחתי את וואטסאפ. בחר איש קשר ואשר את השליחה בעצמך.")
+                val body = command.substringAfter("שלח", command).substringAfter("וואטסאפ", command).trim()
+                val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(command)?.value.orEmpty()
+                confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", body, phone = phone)
             }
             command.contains("התקשר") || command.contains("חייג") -> {
-                val number = command.filter { it.isDigit() || it == '+' }
-                startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                speak("פתחתי את החייגן. לחץ על כפתור השיחה כדי להתקשר.")
+                val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(command)?.value.orEmpty()
+                if (number.isBlank()) speak("כדי לחייג, צריך מספר טלפון בפקודה.")
+                else confirmAction(ActionConfirmationActivity.TYPE_CALL, "חיוג למספר $number", "", phone = number)
             }
             command.contains("מייל") || command.contains("אימייל") -> {
-                startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                speak("פתחתי את אפליקציית הדואר. אפשר לנסח ולאשר את השליחה.")
+                val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}").find(command)?.value.orEmpty()
+                val body = command.substringAfter("תוכן", command.substringAfter("כתוב", command)).trim()
+                confirmAction(ActionConfirmationActivity.TYPE_EMAIL, "כתיבת הודעת דואר", body, recipient = recipient)
             }
             command.contains("תזכורת") || command.contains("יומן") -> {
-                val event = Intent(Intent.ACTION_INSERT).setData(android.provider.CalendarContract.Events.CONTENT_URI)
-                    .putExtra(android.provider.CalendarContract.Events.TITLE, command)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(event)
-                speak("פתחתי אירוע חדש ביומן. השלם את הפרטים ושמור.")
+                val title = command.substringAfter("תזכורת", command.substringAfter("יומן", command)).trim()
+                confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "תזכורת חדשה" }, "")
             }
             command.contains("חפש") || command.contains("אינטרנט") -> {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(command)))
@@ -204,6 +199,23 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 } else speak("מנוע הבינה עדיין לא מוכן. פתח את האפליקציה הראשית ולחץ על הורד והפעל מוח AI מקומי.")
             }
         }
+    }
+
+    private fun confirmAction(
+        type: String,
+        title: String,
+        body: String,
+        recipient: String = "",
+        phone: String = ""
+    ) {
+        val intent = Intent(this, ActionConfirmationActivity::class.java)
+            .putExtra(ActionConfirmationActivity.EXTRA_TYPE, type)
+            .putExtra(ActionConfirmationActivity.EXTRA_TITLE, title)
+            .putExtra(ActionConfirmationActivity.EXTRA_BODY, body)
+            .putExtra(ActionConfirmationActivity.EXTRA_RECIPIENT, recipient)
+            .putExtra(ActionConfirmationActivity.EXTRA_PHONE, phone)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
     }
 
     private fun askAi(
