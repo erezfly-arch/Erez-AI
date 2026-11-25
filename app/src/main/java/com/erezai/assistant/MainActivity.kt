@@ -39,7 +39,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
                 latestScreenImagePath = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_IMAGE_PATH).orEmpty()
                 latestScreenFramePaths = intent?.getStringArrayListExtra(ScreenCaptureService.EXTRA_SCREEN_FRAME_PATHS)?.toList().orEmpty()
-                if (latestScreenText.isNotBlank()) say("קיבלתי תוכן מסך לניתוח: " + latestScreenText.take(400))
             }
         }
     }
@@ -125,8 +124,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             say("התחלתי להכין את מודל הבינה במכשיר. ההורדה עשויה להיות גדולה.")
         })
         root.addView(button("שלח הוראה") { handle(command.text.toString()) })
-        root.addView(button("דבר איתי עכשיו · זיהוי עברית מקומי") { requestVoicePermissionAndStart() })
-        root.addView(button("הפעל שיחה קולית רציפה ברקע") { requestVoicePermissionAndStart() })
+        root.addView(button("הפעל שיחה קולית רציפה ברקע · עברית מקומית") { requestVoicePermissionAndStart() })
         root.addView(button("עצור שיחה קולית") { stopService(Intent(this, VoiceAssistantService::class.java)); say("בקשת עצירת ההאזנה נשלחה.") })
         root.addView(button("הצג עוזר צף מעל אפליקציות") {
             if (android.provider.Settings.canDrawOverlays(this)) {
@@ -172,7 +170,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         try {
             startService(Intent(this, OverlayAssistantService::class.java))
             ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
-            say("הפעלתי האזנה קולית. המיקרופון פעיל כל עוד ההתראה של ארז AI מוצגת. הפקודות ינותבו לעוזר הצף. אפשר לעצור דרך ההתראה או מתוך האפליקציה.")
+            say("הפעלתי את שירות ההאזנה המקומי. לאחר טעינת מודל הדיבור, הפקודות יתחילו במילת ההפעלה ״ארז״. אפשר לעצור דרך ההתראה.")
         } catch (_: Exception) {
             say("לא הצלחתי להפעיל האזנה ברקע. יש לפתוח את האפליקציה ולאשר מיקרופון.")
         }
@@ -292,8 +290,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
             t.contains("התקשר") || t.contains("חייג") -> {
                 val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
-                if (number.isBlank()) speak("כדי לחייג, צריך מספר טלפון בפקודה.")
-                else confirmAction(ActionConfirmationActivity.TYPE_CALL, "חיוג למספר $number", "", phone = number)
+                confirmAction(
+                    ActionConfirmationActivity.TYPE_CALL,
+                    if (number.isBlank()) "בחר איש קשר לחיוג" else "חיוג למספר $number",
+                    "",
+                    phone = number
+                )
             }
             t.contains("תזכורת") || t.contains("יומן") -> {
                 val title = t.substringAfter("תזכורת", t.substringAfter("יומן", t)).trim()
