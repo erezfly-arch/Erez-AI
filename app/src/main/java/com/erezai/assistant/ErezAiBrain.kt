@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.collect
 object ErezAiBrain {
     private const val MODEL_NAME = "Qwen2-VL-2B.litertlm"
     private const val MODEL_URL =
-        "https://huggingface.co/litert-community/Qwen2-VL-2B/resolve/main/Qwen2-VL-2B.litertlm"
+        "https://huggingface.co/litert-community/Qwen2-VL-2B/resolve/be3809f1d80e2adac2ad929bf483c960ca907023/Qwen2-VL-2B.litertlm"
     private const val MODEL_BYTES = 1_783_424_544L
     private const val MODEL_SHA256 = "cf481776bcb16fe539a38c924a67fc213bb5ee55e6fa600729f060e64849066b"
     private val executor = Executors.newSingleThreadExecutor()
@@ -287,7 +287,12 @@ object ErezAiBrain {
                 val rangeEnd = match.groupValues[2].toLong()
                 val total = match.groupValues[3].toLong()
                 if (rangeStart != offset || rangeEnd != end || total != MODEL_BYTES) {
-                    throw IllegalStateException("גודל או טווח קובץ המודל השתנו בשרת (גודל מדווח: $total bytes). לא נשמר קובץ לא תואם.")
+                    // Never append bytes from a different model revision to a partial download.
+                    temp.delete()
+                    throw IllegalStateException(
+                        "שרת המודל החזיר גרסה או טווח לא תואמים (גודל מדווח: $total bytes). " +
+                            "ההורדה החלקית נמחקה כדי למנוע קובץ פגום. נסה שוב."
+                    )
                 }
                 val expectedChunk = end - offset + 1L
                 var received = 0L
