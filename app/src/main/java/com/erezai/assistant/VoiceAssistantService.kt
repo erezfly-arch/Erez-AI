@@ -74,6 +74,7 @@ class VoiceAssistantService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             running = false
+            sendBroadcast(Intent(ACTION_STATUS).setPackage(packageName).putExtra(EXTRA_STATUS, "ההאזנה נעצרה."))
             offlineSpeech?.cancel()
             stopSelf()
             return START_NOT_STICKY
@@ -245,6 +246,7 @@ class VoiceAssistantService : Service() {
 
     override fun onDestroy() {
         running = false
+        sendBroadcast(Intent(ACTION_STATUS).setPackage(packageName).putExtra(EXTRA_STATUS, "ההאזנה נעצרה."))
         offlineSpeech?.cancel()
         try { unregisterReceiver(controlReceiver) } catch (_: Exception) {}
         try { recorder?.stop() } catch (_: Exception) {}
