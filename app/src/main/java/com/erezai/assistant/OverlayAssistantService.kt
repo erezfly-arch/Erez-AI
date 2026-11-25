@@ -36,6 +36,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private var panel: LinearLayout? = null
     private var latestText = ""
     private var latestAudioText = ""
+    private var latestVoiceStatus = ""
+    private var voiceButton: TextView? = null
     private var latestScreenImagePath = ""
     private var latestScreenFramePaths: List<String> = emptyList()
     private var statusText: TextView? = null
@@ -55,7 +57,10 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     statusText?.text = "זיהוי קולי: $transcript"
                 }
             } else if (intent?.action == VoiceAssistantService.ACTION_STATUS) {
-                statusText?.text = intent.getStringExtra(VoiceAssistantService.EXTRA_STATUS).orEmpty()
+                latestVoiceStatus = intent.getStringExtra(VoiceAssistantService.EXTRA_STATUS).orEmpty()
+                voiceListening = latestVoiceStatus.contains("מקשיב") || latestVoiceStatus.contains("מוריד מודל") || latestVoiceStatus.contains("מכין זיהוי")
+                statusText?.text = latestVoiceStatus
+                voiceButton?.text = if (voiceListening) "⏹ עצור האזנה" else "🎙️ דבר עם ארז"
             } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_STOPPED) {
                 latestText = ""
                 latestScreenImagePath = ""
@@ -250,7 +255,11 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             }
         }
         val status = TextView(this).apply {
-            text = if (latestText.isBlank()) "מוכן לעזור לך." else latestText.take(500)
+            text = when {
+                latestVoiceStatus.isNotBlank() -> latestVoiceStatus
+                latestText.isNotBlank() -> latestText.take(500)
+                else -> "מוכן לעזור לך."
+            }
             setTextColor(0xFFE6EDFF.toInt())
             textSize = 13f
             autoLinkMask = Linkify.WEB_URLS
@@ -266,6 +275,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         val mic = styledButton(if (voiceListening) "⏹ עצור האזנה" else "🎙️ דבר עם ארז", 0xFF7C3AED.toInt()) {
             toggleVoice(it as TextView)
         }
+        voiceButton = mic
         actions.addView(mic, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(6) })
         actions.addView(styledButton("שלח  ➤", 0xFF2563EB.toInt()) {
             runCommand(input.text.toString())
@@ -296,6 +306,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         panel?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         panel = null
         statusText = null
+        voiceButton = null
     }
 
     private fun runCommand(raw: String) {
