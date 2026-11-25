@@ -189,8 +189,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             return
         }
         try {
-            startService(Intent(this, OverlayAssistantService::class.java))
             ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
+            // Keep overlay startup lightweight; do not load heavy AI models here.
+            startService(Intent(this, OverlayAssistantService::class.java))
             say("הפעלתי את שירות ההאזנה המקומי. לאחר טעינת מודל הדיבור, הפקודות יתחילו במילת ההפעלה ״ארז שומע?״. אפשר לעצור דרך ההתראה.")
         } catch (_: Exception) {
             say("לא הצלחתי להפעיל האזנה ברקע. יש לפתוח את האפליקציה ולאשר מיקרופון.")
