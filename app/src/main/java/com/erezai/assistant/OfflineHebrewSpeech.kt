@@ -17,6 +17,7 @@ import java.net.URL
 class OfflineHebrewSpeech(private val context: Context) {
     private val modelDir = File(context.filesDir, "whisper-he-base-int8")
     private var recognizer: OfflineRecognizer? = null
+    @Volatile private var activeConnection: HttpURLConnection? = null
 
     fun initialize(onStatus: (String) -> Unit) {
         if (recognizer != null) return
@@ -59,9 +60,14 @@ class OfflineHebrewSpeech(private val context: Context) {
         }
     }
 
+    fun cancel() {
+        try { activeConnection?.disconnect() } catch (_: Exception) {}
+    }
+
     fun close() {
         recognizer?.release()
         recognizer = null
+        cancel()
     }
 
     private fun ensureFile(target: File, url: String, minimumBytes: Long, beforeDownload: () -> Unit) {
@@ -75,6 +81,7 @@ class OfflineHebrewSpeech(private val context: Context) {
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", "ErezAI-Android")
         }
+        activeConnection = connection
         try {
             connection.connect()
             val code = connection.responseCode
@@ -87,6 +94,7 @@ class OfflineHebrewSpeech(private val context: Context) {
             if (!temp.renameTo(target)) throw IllegalStateException("Cannot save speech model: ${target.name}")
         } finally {
             connection.disconnect()
+            activeConnection = null
             if (temp.exists()) temp.delete()
         }
     }
