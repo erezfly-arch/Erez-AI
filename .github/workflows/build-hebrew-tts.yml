@@ -22,6 +22,8 @@ jobs:
           cd work/hebrew
           curl -fL --retry 3 -o he_IL-saspeech-medium.onnx "https://huggingface.co/rhasspy/piper-voices/resolve/main/he/he_IL/saspeech/medium/he_IL-saspeech-medium.onnx"
           curl -fL --retry 3 -o he_IL-saspeech-medium.onnx.json "https://huggingface.co/rhasspy/piper-voices/resolve/main/he/he_IL/saspeech/medium/he_IL-saspeech-medium.onnx.json"
+          curl -fL --retry 3 -o espeak-ng-data.tar.bz2 "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/espeak-ng-data.tar.bz2"
+          tar -xjf espeak-ng-data.tar.bz2
           python -m pip install --no-cache-dir onnx==1.17.0
           python - <<'PY'
           import json
@@ -49,7 +51,7 @@ jobs:
           onnx.save(model, filename)
           PY
           cd ../..
-          zip -9 -r hebrew-tts-model.zip work/hebrew/he_IL-saspeech-medium.onnx work/hebrew/tokens.txt
+          zip -9 -r hebrew-tts-model.zip work/hebrew/he_IL-saspeech-medium.onnx work/hebrew/tokens.txt work/hebrew/espeak-ng-data
           mkdir -p build
           mv hebrew-tts-model.zip build/hebrew-tts-model.zip
       - name: Publish model release asset
