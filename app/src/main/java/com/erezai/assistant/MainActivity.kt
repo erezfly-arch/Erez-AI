@@ -164,32 +164,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             setPadding(0, 12, 0, 12)
         })
         root.addView(button("שלח הוראה") { handle(command.text.toString()) })
-        root.addView(button("הפעל שיחה קולית רציפה ברקע · עברית מקומית") { requestVoicePermissionAndStart() })
-        root.addView(button("עצור שיחה קולית") { stopService(Intent(this, VoiceAssistantService::class.java)); say("בקשת עצירת ההאזנה נשלחה.") })
-        root.addView(button("הצג עוזר צף מעל אפליקציות") {
-            if (android.provider.Settings.canDrawOverlays(this)) {
-                startService(Intent(this, OverlayAssistantService::class.java))
-                say("העוזר הצף הופעל. אפשר לפתוח אותו גם בזמן שימוש באפליקציות אחרות.")
-            } else {
-                startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-                say("יש לאשר הצגה מעל אפליקציות. לאחר מכן חזור והפעל את העוזר הצף.")
-            }
-        })
-        root.addView(button("אפשר לעוזר לצפות במסך") {
-            val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            screenConsent.launch(mgr.createScreenCaptureIntent())
-        })
-        root.addView(button("הפעל הבנת מסך גם בלי שיתוף מסך") {
-            startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            say("בהגדרות נגישות אפשר להפעיל את ארז AI. השירות יקרא טקסט גלוי באפליקציות רק לאחר שתפעיל אותו.")
-        })
-        root.addView(button("מה אתה רואה במסך?") { handle("מה אתה רואה במסך") })
-        root.addView(button("עצור צפייה במסך") {
-            stopService(Intent(this, ScreenCaptureService::class.java))
-            latestScreenText = ""
-            latestScreenImagePath = ""
-            latestScreenFramePaths = emptyList()
-            say("שיתוף המסך נעצר.")
+        root.addView(TextView(this).apply {
+            text = "השיחה, ההאזנה והצפייה במסך מופעלות אוטומטית לאחר אישורי Android. אפשר לעצור דרך ההתראה של ארז AI."
+            setTextColor(0xFFB7C4D8.toInt())
+            textSize = 13f
+            setPadding(0, 10, 0, 10)
         })
         root.addView(ScrollView(this).apply { addView(log) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
