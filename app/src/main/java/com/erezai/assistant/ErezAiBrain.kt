@@ -9,6 +9,7 @@ import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.SamplerConfig
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -72,34 +73,58 @@ object ErezAiBrain {
                 // Prefer GPU vision for speed, but fall back to CPU so supported
                 // devices without a compatible GPU delegate can still run fully offline.
                 val created = try {
+                    onStatus("מפעיל האצת GPU למודל השפה והראייה…")
                     Engine(
                         EngineConfig(
                             modelPath = model.absolutePath,
-                            backend = Backend.CPU(),
+                            backend = Backend.GPU(),
                             visionBackend = Backend.GPU(),
+                            maxNumTokens = 4096,
+                            maxNumImages = 1,
                             cacheDir = context.cacheDir.absolutePath
                         )
                     ).also { it.initialize() }
                 } catch (gpuError: Exception) {
-                    onStatus("האצת GPU אינה זמינה במכשיר. מנסה להפעיל את מודל הראייה מקומית על CPU…")
-                    Engine(
-                        EngineConfig(
-                            modelPath = model.absolutePath,
-                            backend = Backend.CPU(),
-                            visionBackend = Backend.CPU(),
-                            cacheDir = context.cacheDir.absolutePath
-                        )
-                    ).also { it.initialize() }
+                    onStatus("האצת GPU מלאה אינה נתמכת. מנסה מעבד CPU עם האצת GPU לתמונות…")
+                    try {
+                        Engine(
+                            EngineConfig(
+                                modelPath = model.absolutePath,
+                                backend = Backend.CPU(),
+                                visionBackend = Backend.GPU(),
+                                maxNumTokens = 4096,
+                                maxNumImages = 1,
+                                cacheDir = context.cacheDir.absolutePath
+                            )
+                        ).also { it.initialize() }
+                    } catch (hybridError: Exception) {
+                        onStatus("עובר למצב תאימות מלא על CPU…")
+                        Engine(
+                            EngineConfig(
+                                modelPath = model.absolutePath,
+                                backend = Backend.CPU(),
+                                visionBackend = Backend.CPU(),
+                                maxNumTokens = 4096,
+                                maxNumImages = 1,
+                                cacheDir = context.cacheDir.absolutePath
+                            )
+                        ).also { it.initialize() }
+                    }
                 }
                 engine = created
                 conversation = created.createConversation(
                     ConversationConfig(
                         systemInstruction = Contents.of(
-                            "אתה ארז AI, עוזר אישי בעברית. ענה בעברית טבעית, קצר וברור. " +
-                            "אתה יכול לנתח תמונות ומסכים כאשר נשלחת אליך תמונה. " +
-                            "אל תטען שביצעת פעולה שלא ביצעת. אם חסר מידע שאל שאלה אחת. " +
+                            "אתה ארז, עוזר אישי חכם של המשתמש. דבר תמיד בעברית ישראלית טבעית, " +
+                            "בסגנון שיחה אנושי, ישיר, ברור ולא רובוטי. הבן הוראות בעברית מדוברת, " +
+                            "כולל סלנג ושגיאות תמלול קלות. ענה קצר ולעניין, בלי לחזור על השאלה. " +
+                            "אם המשתמש מבקש מידע על המסך, התבסס על התמונה והטקסט שסופקו; " +
+                            "אם אין תמונה או מידע מספיק, אמור זאת במפורש ואל תנחש. " +
+                            "אל תטען שביצעת פעולה שלא ביצעת. אם חסר פרט הכרחי שאל שאלה אחת. " +
                             "לפני שליחת הודעות, פרסום, שיחות או שינויי יומן דרוש אישור מפורש."
-                        )
+                        ),
+                        samplerConfig = SamplerConfig(topK = 20, topP = 0.90, temperature = 0.35),
+                        maxOutputToken = 256
                     )
                 )
                 ready = true
@@ -143,8 +168,11 @@ object ErezAiBrain {
                     activeEngine.createConversation(
                         ConversationConfig(
                             systemInstruction = Contents.of(
-                                "אתה ארז AI. נתח את התמונה שנשלחה וענה בעברית. תאר רק מה שניתן לראות בפועל."
-                            )
+                                "אתה ארז, עוזר אישי בעברית ישראלית טבעית. נתח את התמונה שנשלחה, " +
+                                "ענה ישירות לבקשת המשתמש, ותאר רק פרטים שניתן לראות בפועל."
+                            ),
+                            samplerConfig = SamplerConfig(topK = 20, topP = 0.90, temperature = 0.35),
+                            maxOutputToken = 256
                         )
                     ).also { oneShot = it }
                 } else conversation!!
