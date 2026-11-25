@@ -1,6 +1,7 @@
 package com.erezai.assistant
 
 import android.content.Context
+import android.os.StatFs
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
@@ -42,6 +43,10 @@ object ErezAiBrain {
                     return@execute
                 }
                 val model = File(context.filesDir, MODEL_NAME)
+                val freeBytes = StatFs(context.filesDir.absolutePath).availableBytes
+                if ((!model.exists() || model.length() != MODEL_BYTES) && freeBytes < MODEL_BYTES + 400_000_000L) {
+                    throw IllegalStateException("נדרש לפנות כ־2.2GB אחסון פנוי כדי להתקין את מוח הבינה המקומי.")
+                }
                 if (!model.exists() || model.length() != MODEL_BYTES) {
                     onStatus("מוריד מוח AI מקומי עם הבנת תמונות. גודל ההורדה כ־1.78GB. אין תשלום או מכסת שימוש.")
                     downloadModel(model) { downloaded, total ->
