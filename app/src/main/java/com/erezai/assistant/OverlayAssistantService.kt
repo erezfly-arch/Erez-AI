@@ -27,6 +27,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private var bubble: Button? = null
     private var panel: LinearLayout? = null
     private var latestText = ""
+    private var latestAudioText = ""
     private var latestScreenImagePath = ""
     private var latestScreenFramePaths: List<String> = emptyList()
     private var statusText: TextView? = null
@@ -35,6 +36,9 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             if (intent?.action == VoiceAssistantService.ACTION_RECOGNIZED) {
                 intent.getStringExtra(VoiceAssistantService.EXTRA_COMMAND)?.let { runCommand(it) }
+            } else if (intent?.action == VoiceAssistantService.ACTION_TRANSCRIPT) {
+                val transcript = intent.getStringExtra(VoiceAssistantService.EXTRA_TRANSCRIPT).orEmpty()
+                if (transcript.isNotBlank()) latestAudioText = (latestAudioText + "\n" + transcript).takeLast(2500)
             } else {
                 latestText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
                     ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
@@ -54,6 +58,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             addAction(ScreenCaptureService.ACTION_SCREEN_TEXT)
             addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
             addAction(VoiceAssistantService.ACTION_RECOGNIZED)
+            addAction(VoiceAssistantService.ACTION_TRANSCRIPT)
         }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(textReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(textReceiver, filter)
@@ -157,7 +162,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     speak("אין כרגע תוכן טקסטואלי מהמסך. אפשר להפעיל שיתוף מסך או נגישות.")
                 } else if (ErezAiBrain.isReady()) {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
-                    askAi("תאר בעברית מה מופיע במסך, מה קורה בתמונה או בסרטון ומה חשוב לדעת. התבסס על הפריימים ועל הטקסט שזוהה.\n" + latestText.take(5000), snapshot, latestScreenFramePaths)
+                    val audioContext = if (latestAudioText.isBlank()) "" else "\n\nדיבור שנקלט מהמיקרופון בסרטון או בסביבה (תמלול אוטומטי, ייתכנו שגיאות):\n" + latestAudioText
+                    askAi("תאר בעברית מה מופיע במסך, מה קורה בתמונה או בסרטון ומה חשוב לדעת. התבסס על הפריימים, הטקסט והדיבור שנקלט.\n" + latestText.take(5000) + audioContext, snapshot, latestScreenFramePaths)
                 } else {
                     speak("זיהיתי טקסט במסך, אבל מנוע הבינה עדיין לא נטען: " + latestText.take(800))
                 }
