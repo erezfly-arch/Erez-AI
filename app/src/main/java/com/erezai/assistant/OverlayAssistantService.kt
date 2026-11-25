@@ -293,7 +293,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 } else if (ErezAiBrain.isReady()) {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
                     val audioContext = if (latestAudioText.isBlank()) "" else "\n\nדיבור שנקלט מהמיקרופון בסרטון או בסביבה (תמלול אוטומטי, ייתכנו שגיאות):\n" + latestAudioText
-                    askAi("תאר בעברית מה מופיע במסך, מה קורה בתמונה או בסרטון ומה חשוב לדעת. התבסס על הפריימים, הטקסט והדיבור שנקלט.\n" + latestText.take(5000) + audioContext, snapshot, latestScreenFramePaths)
+                    askAi("תאר בעברית מה מופיע כרגע במסך ומה חשוב לדעת. התבסס על צילום המסך האחרון ועל הטקסט שזוהה. ענה ישירות ובקצרה.\n" + latestText.take(5000) + audioContext, snapshot)
                 } else {
                     speak("זיהיתי טקסט במסך, אבל מנוע הבינה עדיין לא נטען: " + latestText.take(800))
                 }
