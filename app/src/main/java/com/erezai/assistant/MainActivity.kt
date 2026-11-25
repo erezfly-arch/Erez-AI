@@ -99,7 +99,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     (voice.name.contains("male", ignoreCase = true) || voice.name.contains("masculine", ignoreCase = true))
             }
             if (hebrewMale != null) tts?.voice = hebrewMale
-            tts?.setPitch(0.82f)
+            tts?.setPitch(1.0f)
+            if (hebrewMale == null) say("לא נמצא במכשיר קול גברי עברי ייעודי. כרגע ייעשה שימוש בקול העברי המותקן.")
             tts?.setSpeechRate(0.94f)
             tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { sendBroadcast(Intent(VoiceAssistantService.ACTION_PAUSE).setPackage(packageName)) }
@@ -190,7 +191,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         try {
             startService(Intent(this, OverlayAssistantService::class.java))
             ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
-            say("הפעלתי את שירות ההאזנה המקומי. לאחר טעינת מודל הדיבור, הפקודות יתחילו במילת ההפעלה ״ארז״. אפשר לעצור דרך ההתראה.")
+            say("הפעלתי את שירות ההאזנה המקומי. לאחר טעינת מודל הדיבור, הפקודות יתחילו במילת ההפעלה ״ארז שומע?״. אפשר לעצור דרך ההתראה.")
         } catch (_: Exception) {
             say("לא הצלחתי להפעיל האזנה ברקע. יש לפתוח את האפליקציה ולאשר מיקרופון.")
         }
