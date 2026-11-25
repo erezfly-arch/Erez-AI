@@ -162,6 +162,23 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun confirmAction(
+        type: String,
+        title: String,
+        body: String,
+        recipient: String = "",
+        phone: String = ""
+    ) {
+        startActivity(
+            Intent(this, ActionConfirmationActivity::class.java)
+                .putExtra(ActionConfirmationActivity.EXTRA_TYPE, type)
+                .putExtra(ActionConfirmationActivity.EXTRA_TITLE, title)
+                .putExtra(ActionConfirmationActivity.EXTRA_BODY, body)
+                .putExtra(ActionConfirmationActivity.EXTRA_RECIPIENT, recipient)
+                .putExtra(ActionConfirmationActivity.EXTRA_PHONE, phone)
+        )
+    }
+
     private fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { action() } }
     private fun say(message: String) { if (::log.isInitialized) log.append("\n$message\n") }
     private fun speak(message: String) {
@@ -197,26 +214,22 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
             t.contains("וואטסאפ") || t.contains("whatsapp") -> {
                 val msg = t.substringAfter("שלח", t).substringAfter("וואטסאפ", t).trim()
-                val share = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, msg)
-                try { startActivity(share.setPackage("com.whatsapp")) }
-                catch (_: Exception) { startActivity(Intent.createChooser(share, "שליחה")) }
-                say("פתחתי את מסך השיתוף. צריך לבחור איש קשר ולאשר שליחה.")
+                val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
+                confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", msg, phone = phone)
             }
             t.contains("מייל") || t.contains("אימייל") -> {
-                val i = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
-                startActivity(Intent.createChooser(i, "בחירת אפליקציית דואר"))
-                say("פתחתי אפליקציית דואר. השליחה דורשת אישור שלך.")
+                val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(t)?.value.orEmpty()
+                val body = t.substringAfter("תוכן", t.substringAfter("כתוב", t)).trim()
+                confirmAction(ActionConfirmationActivity.TYPE_EMAIL, "כתיבת הודעת דואר", body, recipient = recipient)
             }
             t.contains("התקשר") || t.contains("חייג") -> {
-                val number = t.filter { it.isDigit() || it == '+' }
-                startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")))
-                say("פתחתי את החייגן. השיחה תתבצע רק לאחר לחיצה שלך.")
+                val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
+                if (number.isBlank()) speak("כדי לחייג, צריך מספר טלפון בפקודה.")
+                else confirmAction(ActionConfirmationActivity.TYPE_CALL, "חיוג למספר $number", "", phone = number)
             }
             t.contains("תזכורת") || t.contains("יומן") -> {
-                val i = Intent(Intent.ACTION_INSERT).setData(android.provider.CalendarContract.Events.CONTENT_URI)
-                    .putExtra(android.provider.CalendarContract.Events.TITLE, t)
-                startActivity(i)
-                say("פתחתי יצירת אירוע ביומן. יש להשלים ולאשר.")
+                val title = t.substringAfter("תזכורת", t.substringAfter("יומן", t)).trim()
+                confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "תזכורת חדשה" }, "")
             }
             t.contains("חפש") || t.contains("גוגל") || t.contains("אינטרנט") -> {
                 val q = Uri.encode(t)
