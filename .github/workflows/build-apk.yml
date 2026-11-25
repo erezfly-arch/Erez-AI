@@ -6,8 +6,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: erez-ai-android-build-${{ github.ref }}
-  cancel-in-progress: true
+  group: erez-ai-android-build-${{ github.sha }}
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
