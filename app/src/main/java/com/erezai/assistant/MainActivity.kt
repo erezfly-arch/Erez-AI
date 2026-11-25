@@ -67,6 +67,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this, this)
         buildUi()
+        if (ErezAiBrain.hasDownloadedModel(this)) {
+            say("נמצא מודל מקומי שהותקן בעבר. טוען אותו אוטומטית…")
+            ErezAiBrain.prepare(this) { message -> runOnUiThread { say(message) } }
+        }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
