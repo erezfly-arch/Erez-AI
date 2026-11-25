@@ -98,6 +98,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         root.addView(title)
         root.addView(subtitle)
         root.addView(command)
+        root.addView(button("הורד והפעל מוח AI מקומי") {
+            ErezAiBrain.prepare(this) { message -> runOnUiThread { say(message) } }
+            say("התחלתי להכין את מודל הבינה במכשיר. ההורדה עשויה להיות גדולה.")
+        })
         root.addView(button("שלח הוראה") { handle(command.text.toString()) })
         root.addView(button("דבר איתי") {
             val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -204,7 +208,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$q")))
                 say("פתחתי תוצאות חיפוש בדפדפן. סיכום תשובות עם מקורות יתווסף בהמשך.")
             }
-            else -> say("קיבלתי. הבנת שפה חופשית ותכנון פעולות עדיין בפיתוח.")
+            else -> {
+                if (ErezAiBrain.isReady()) {
+                    speak("אני חושב…")
+                    ErezAiBrain.ask(t, { chunk -> runOnUiThread { log.append(chunk) } },
+                        { runOnUiThread { log.append("\\n") } },
+                        { error -> runOnUiThread { speak(error) } })
+                } else speak("מנוע הבינה עדיין לא מוכן. לחץ קודם על הורד והפעל מוח AI מקומי.")
+            }
         }
     }
 
