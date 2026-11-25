@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.CalendarContract
+import android.provider.ContactsContract
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
@@ -19,6 +20,9 @@ import java.util.Calendar
  * The target app still owns its final Send/Call/Save confirmation.
  */
 class ActionConfirmationActivity : Activity() {
+    private var selectedPhone = ""
+    private var confirmButton: Button? = null
+    private var detailText: TextView? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val type = intent.getStringExtra(EXTRA_TYPE).orEmpty()
@@ -39,27 +43,59 @@ class ActionConfirmationActivity : Activity() {
             setTextColor(-1)
             gravity = Gravity.CENTER
         })
-        root.addView(TextView(this).apply {
+        detailText = TextView(this).apply {
             text = title + if (recipient.isNotBlank()) "\nאל: $recipient" else ""
             textSize = 18f
             setTextColor(-1)
             setPadding(0, 24, 0, 12)
-        })
+        }
+        root.addView(detailText)
         if (body.isNotBlank()) root.addView(TextView(this).apply {
             text = body
             textSize = 16f
             setTextColor(0xFFE0E7F0.toInt())
             setPadding(0, 0, 0, 24)
         })
-        root.addView(Button(this).apply {
-            text = "אשר והמשך"
-            setOnClickListener { executeAction(type, title, body, recipient, phone) }
-        })
+        confirmButton = Button(this).apply {
+            text = if (type == TYPE_CALL && phone.isBlank()) "בחר איש קשר" else "אשר והמשך"
+            setOnClickListener {
+                if (type == TYPE_CALL && phone.isBlank() && selectedPhone.isBlank()) {
+                    try {
+                        startActivityForResult(
+                            Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI),
+                            REQUEST_PHONE
+                        )
+                    } catch (_: Exception) {
+                        Toast.makeText(this@ActionConfirmationActivity, "לא ניתן לפתוח אנשי קשר", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    executeAction(type, title, body, recipient, selectedPhone.ifBlank { phone })
+                }
+            }
+        }
+        root.addView(confirmButton)
         root.addView(Button(this).apply {
             text = "ביטול"
             setOnClickListener { finish() }
         })
         setContentView(root)
+    }
+
+    @Deprecated("Deprecated in Android API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_PHONE || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        val column = ContactsContract.CommonDataKinds.Phone.NUMBER
+        contentResolver.query(uri, arrayOf(column), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) selectedPhone = cursor.getString(0).orEmpty()
+        }
+        if (selectedPhone.isNotBlank()) {
+            detailText?.text = "חיוג לאיש קשר נבחר\n$selectedPhone"
+            confirmButton?.text = "אשר חיוג"
+        } else {
+            Toast.makeText(this, "לא נמצא מספר לאיש הקשר", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun executeAction(type: String, title: String, body: String, recipient: String, phone: String) {
@@ -136,5 +172,6 @@ class ActionConfirmationActivity : Activity() {
         const val TYPE_CALL = "call"
         const val TYPE_CALENDAR = "calendar"
         const val TYPE_COMMENT = "comment"
+        private const val REQUEST_PHONE = 721
     }
 }
