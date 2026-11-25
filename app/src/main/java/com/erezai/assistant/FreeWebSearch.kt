@@ -1,6 +1,7 @@
 package com.erezai.assistant
 
 import org.jsoup.Jsoup
+import android.net.Uri
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -26,7 +27,10 @@ object FreeWebSearch {
         return page.select(".result").take(limit).mapNotNull { item ->
             val anchor = item.selectFirst(".result__a") ?: return@mapNotNull null
             val title = anchor.text().trim()
-            val href = anchor.attr("href").trim()
+            val rawHref = anchor.absUrl("href").trim()
+            val href = if (rawHref.contains("uddg=")) {
+                Uri.parse(rawHref).getQueryParameter("uddg") ?: rawHref
+            } else rawHref
             val snippet = item.selectFirst(".result__snippet")?.text()?.trim().orEmpty()
             if (title.isBlank() || href.isBlank()) null
             else WebSearchResult(title, href, snippet)
