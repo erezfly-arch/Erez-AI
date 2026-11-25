@@ -1,31 +1,47 @@
-# ארז AI — Android first
+# ארז AI — Android-first local assistant
 
-Private Android-first personal assistant project. iOS work is intentionally deferred until the Android version is complete.
+פרויקט Android מקורי ב-Kotlin. פיתוח iPhone מושהה עד להשלמת Android.
 
-## Implemented engineering components
-- Native Kotlin Android app (minSdk 26, target SDK 35).
-- Hebrew command entry, one-shot Android speech-recognition intent, and Hebrew text-to-speech output.
-- User-started foreground microphone service with an ongoing notification, a visible stop action, Hebrew speech recognition, and routing of recognized commands to the floating assistant while another app is in use. Recognition quality and network/offline behavior depend on the device speech provider; this is not yet a two-way conversational AI.
-- Explicit Android MediaProjection consent flow with an ongoing foreground notification and a stop control.
-- On-device ML Kit OCR pipeline for text visible in captured screen frames (Latin-script recognition).
-- Optional Android AccessibilityService that can read visible UI text after the user explicitly enables it in Android Accessibility settings. This is the path for UI text that is not recognized by the OCR model, including many Hebrew UI elements.
-- Intents to open WhatsApp share, email composer, calendar event creation, phone dialer, and web search. Final sending/calling/creation confirmation remains with the user.
-- GitHub Actions workflow builds a debug APK artifact on push or manual dispatch.
+## עקרונות עלות ופרטיות
+- אין שימוש ב-API בתשלום, מפתח API בתשלום, מנוי או חיוב לפי פעולה.
+- מודל השפה והראייה רץ מקומית על המכשיר דרך LiteRT-LM.
+- זיהוי הדיבור בעברית רץ מקומית דרך Whisper Base + sherpa-onnx.
+- לאחר הורדת המודלים הראשונית, שיחה, זיהוי דיבור וניתוח תמונות אינם תלויים במכסת שימוש של ספק AI.
+- חיפוש רשת משתמש בדף HTML ציבורי של DuckDuckGo ללא מפתח API; ספק החיפוש עדיין עשוי להפעיל הגנות אנטי-בוט רגילות.
+- הורדות ראשוניות דורשות אינטרנט. יש צורך בכ־2.2GB פנויים למודל הראייה והשפה ועוד כ־160MB למודל הדיבור, בנוסף למקום זמני.
 
-## Still required before the app is considered complete
-This is **not yet the finished assistant**:
-- Complete and validate the floating assistant lifecycle and reliable continuous two-way voice conversation while another app (for example Facebook video) is in the foreground.
-- A robust Hebrew-capable visual understanding layer combining accessibility content and image OCR, with safe summaries of videos/images rather than just extracted text.
-- A real conversational reasoning model. The current command handling is rule-based and does not understand arbitrary natural language.
-- A safe action planner that can fill text fields, draft comments, send WhatsApp/email messages, create calendar reminders, and place calls with review/confirmation steps.
-- Web search integration that returns grounded summaries and source links inside the assistant, rather than opening a browser search page.
-- Device-level integration tests and a verified release build.
+## רכיבים שממומשים בקוד
+- אפליקציית Android בעברית, ממשק פקודות ועוזר צף.
+- מודל Qwen2-VL 2B מקומי לשיחה ולהבנת תמונות דרך LiteRT-LM. ההורדה ניתנת לחידוש ומאומתת באמצעות SHA-256.
+- דגימת מסך דרך MediaProjection בהסכמה מפורשת, עם שמירת עד שישה פריימים אחרונים לניתוח רצף קצר של וידאו.
+- זיהוי טקסט באנגלית עם ML Kit, זיהוי עברית עם Tesseract מקומי, ותוויות חזותיות כלליות.
+- זיהוי דיבור עברי מקומי עם Whisper Base multilingual דרך sherpa-onnx. ההאזנה פועלת בשירות foreground עם התראה וכפתור עצירה. פקודות קוליות דורשות פתיחה במילת ההפעלה "ארז" כדי לא לפרש דיבור מסרטונים כפקודות.
+- השהיית המיקרופון בזמן שהעוזר מדבר כדי לצמצם הד.
+- חיפוש רשת ללא מפתח API והעברת תוצאות למודל המקומי לסיכום עם קישורים.
+- מסך אישור לפני פתיחת פעולות תקשורת ויומן: WhatsApp, דוא"ל, חיוג ואירועים. WhatsApp ודוא"ל עדיין דורשים את אישור השליחה הסופי באפליקציה שלהם; חיוג נפתח בחייגן; אירוע נפתח ביומן.
+- ניסוח תגובות בעזרת המודל המקומי והעתקת הטיוטה ללוח לאחר אישור.
+- שירות נגישות אופציונלי לקריאת טקסט גלוי, רק לאחר שהמשתמש מפעיל אותו ידנית בהגדרות Android.
+- GitHub Actions בונה APK Debug בכל push ל-main.
 
-## Safety and Android platform constraints
-Screen capture and accessibility require explicit user consent. Android may block capture of protected content. Screen access must have a persistent visible indicator and immediate stop control. Messages, public comments, calendar changes, and calls must be reviewed before execution. Accessibility access is powerful and must remain under the user's control.
+## מגבלות שעדיין דורשות אימות במכשיר
+- בניית APK מוצלחת מאמתת קומפילציה בלבד, לא ביצוע תקין במכשיר.
+- מודל Qwen2-VL גדול; מהירות, צריכת RAM, חום ויכולת הרצה תלויים בדגם הטלפון ובזיכרון הפנוי.
+- Whisper Base עשוי להיות איטי במכשירים חלשים. איכות עברית תלויה במיקרופון, רעשי רקע והגייה.
+- ניתוח וידאו מבוסס עד שישה פריימים עוקבים שנדגמים בערך פעם ב־1.2 שניות, ולא הבנה רציפה של כל פריים.
+- שמע של סרטון נקלט דרך המיקרופון רק אם הרמקול משמיע אותו ונגיש למיקרופון. Android ואפליקציות מסוימות חוסמים לכידת שמע פנימי; אין הבטחה לשמוע אודיו דרך אוזניות או תוכן מוגן.
+- פעולות WhatsApp/דוא"ל/יומן/חיוג נפתחות עם פרטים מוכנים, אך האישור הסופי נשאר באפליקציית היעד. תגובות מועתקות ללוח ולא מתפרסמות אוטומטית.
+- חיפוש רשת תלוי בזמינות ובמדיניות של אתר החיפוש החינמי.
 
-## Build
-GitHub Actions workflow: `.github/workflows/build-apk.yml`. It builds `assembleDebug` and publishes the APK as the `Erez-AI-debug-APK` artifact.
+## בנייה
+GitHub Actions: `.github/workflows/build-apk.yml`
+הפקודה: `gradle --no-daemon assembleDebug`
+Artifact: `Erez-AI-debug-APK`
 
-## Cost target
-Prefer local/open-source components and free integrations. No paid API is required by the current foundation. This cannot guarantee that every cloud-grade AI capability or web service will remain free forever; avoid paid APIs and subscription dependencies by default.
+## מודלים וספריות
+- LiteRT-LM + Qwen2-VL 2B — מודל מקומי להסקה חזותית ושפתית.
+- sherpa-onnx + Whisper Base multilingual — זיהוי דיבור מקומי.
+- Tesseract4Android עם `heb.traineddata` — OCR עברי מקומי.
+- Google ML Kit — OCR לטיני ותוויות תמונה.
+- Jsoup — קריאת תוצאות HTML של חיפוש ציבורי.
+
+הפרויקט אינו מוצג כמוצר גמור עד שבניית ה-APK עוברת ונבדקות בפועל יכולות הליבה במכשיר Android היעד.
