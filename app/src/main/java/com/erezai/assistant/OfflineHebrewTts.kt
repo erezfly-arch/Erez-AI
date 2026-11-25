@@ -4,10 +4,6 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
-import android.util.Log
-import com.github.csukuangfj.piper.phonemize.piperPhonemizeInitialize
-import com.github.csukuangfj.piper.phonemize.piperPhonemizeText
-import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
@@ -19,7 +15,7 @@ import java.util.zip.ZipInputStream
 
 /**
  * Offline Hebrew neural speech synthesis using the Piper Hebrew SASpeech voice.
- * Model files are downloaded once from the project's public release and stored privately.
+ * Sherpa 1.x performs phonemization locally with the bundled espeak-ng data.
  */
 class OfflineHebrewTts(private val context: Context) {
     private val modelDir = File(context.filesDir, "erez-hebrew-male-tts")
@@ -31,21 +27,27 @@ class OfflineHebrewTts(private val context: Context) {
         modelDir.mkdirs()
         val model = File(modelDir, "he_IL-saspeech-medium.onnx")
         val tokens = File(modelDir, "tokens.txt")
-        if (!model.exists() || model.length() < 60_000_000L || !tokens.exists() || tokens.length() < 100L) {
+        val espeakData = File(modelDir, "espeak-ng-data")
+        if (!model.exists() || model.length() < 60_000_000L ||
+            !tokens.exists() || tokens.length() < 100L ||
+            !espeakData.exists() || (espeakData.listFiles()?.isEmpty() != false)
+        ) {
             onStatus("מוריד קול עברי גברי מקומי בפעם הראשונה…")
             downloadAndExtract()
         }
-        if (model.length() < 60_000_000L || tokens.length() < 100L) {
+        if (model.length() < 60_000_000L || tokens.length() < 100L ||
+            !espeakData.exists() || (espeakData.listFiles()?.isEmpty() != false)
+        ) {
             throw IllegalStateException("קובצי הקול העברי לא הותקנו במלואם")
         }
 
         onStatus("מפעיל מנוע דיבור עברי מקומי…")
-        piperPhonemizeInitialize(context)
         val config = OfflineTtsConfig(
             model = OfflineTtsModelConfig(
                 vits = OfflineTtsVitsModelConfig(
                     model = model.absolutePath,
-                    tokens = tokens.absolutePath
+                    tokens = tokens.absolutePath,
+                    dataDir = espeakData.absolutePath
                 ),
                 numThreads = 2,
                 debug = false,
@@ -53,24 +55,13 @@ class OfflineHebrewTts(private val context: Context) {
             )
         )
         engine = OfflineTts(config = config)
-        onStatus("הקול העברי המקומי מוכן.")
+        onStatus("הקול העברי הגברי המקומי מוכן.")
     }
 
     @Synchronized
     fun speak(text: String) {
         val active = engine ?: throw IllegalStateException("מנוע הדיבור העברי עדיין לא מוכן")
-        val voice = active.lang().ifBlank { "he" }
-        val phonemeResult = piperPhonemizeText(text, voice)
-            ?: throw IllegalStateException("לא ניתן להמיר את הטקסט העברי לדיבור")
-        val codepoints = try {
-            Array(phonemeResult.numSentences) { index -> phonemeResult.getPhonemes(index) }
-        } finally {
-            phonemeResult.close()
-        }
-        val generated = active.generateWithConfig(
-            text = "",
-            config = GenerationConfig(phonemeCodepoints = codepoints)
-        )
+        val generated = active.generate(text = text)
         play(generated.samples, generated.sampleRate)
     }
 
@@ -120,7 +111,7 @@ class OfflineHebrewTts(private val context: Context) {
         if (archive.exists()) archive.delete()
         val http = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
             connectTimeout = 30000
-            readTimeout = 180000
+            readTimeout = 240000
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", "ErezAI-Android")
         }
@@ -132,27 +123,38 @@ class OfflineHebrewTts(private val context: Context) {
             http.inputStream.use { input ->
                 archive.outputStream().buffered().use { output -> input.copyTo(output) }
             }
-            if (archive.length() < 50_000_000L) {
+            if (archive.length() < 60_000_000L) {
                 throw IllegalStateException("קובץ הקול שהתקבל קטן מדי או חלקי")
             }
-            val model = File(modelDir, "he_IL-saspeech-medium.onnx")
-            val tokens = File(modelDir, "tokens.txt")
             ZipInputStream(archive.inputStream().buffered()).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
-                    val target = when (File(entry.name).name) {
-                        "he_IL-saspeech-medium.onnx" -> model
-                        "tokens.txt" -> tokens
-                        else -> null
-                    }
-                    if (target != null && !entry.isDirectory) {
-                        target.outputStream().buffered().use { output -> zip.copyTo(output) }
+                    val relative = entry.name.substringAfter("work/hebrew/", "")
+                    val allowed = relative == "he_IL-saspeech-medium.onnx" ||
+                        relative == "tokens.txt" || relative.startsWith("espeak-ng-data/")
+                    if (allowed) {
+                        val target = File(modelDir, relative)
+                        val rootPath = modelDir.canonicalPath + File.separator
+                        if (!target.canonicalPath.startsWith(rootPath)) {
+                            throw IllegalStateException("נתיב לא בטוח בתוך ארכיון הקול")
+                        }
+                        if (entry.isDirectory) {
+                            target.mkdirs()
+                        } else {
+                            target.parentFile?.mkdirs()
+                            target.outputStream().buffered().use { output -> zip.copyTo(output) }
+                        }
                     }
                     zip.closeEntry()
                     entry = zip.nextEntry
                 }
             }
-            if (model.length() < 60_000_000L || tokens.length() < 100L) {
+            val model = File(modelDir, "he_IL-saspeech-medium.onnx")
+            val tokens = File(modelDir, "tokens.txt")
+            val espeakData = File(modelDir, "espeak-ng-data")
+            if (model.length() < 60_000_000L || tokens.length() < 100L ||
+                !espeakData.exists() || (espeakData.listFiles()?.isEmpty() != false)
+            ) {
                 throw IllegalStateException("ארכיון הקול לא הכיל את כל הקבצים הנדרשים")
             }
         } finally {
@@ -167,7 +169,7 @@ class OfflineHebrewTts(private val context: Context) {
     }
 
     fun close() {
-        try { engine?.release() } catch (e: Exception) { Log.w("ErezAI", "TTS release failed", e) }
+        try { engine?.release() } catch (_: Exception) {}
         engine = null
         cancelDownload()
     }
