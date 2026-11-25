@@ -94,6 +94,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale("he", "IL")
+            val hebrewMale = tts?.voices?.firstOrNull { voice ->
+                voice.locale.language == "he" &&
+                    (voice.name.contains("male", ignoreCase = true) || voice.name.contains("masculine", ignoreCase = true))
+            }
+            if (hebrewMale != null) tts?.voice = hebrewMale
+            tts?.setPitch(0.82f)
+            tts?.setSpeechRate(0.94f)
             tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { sendBroadcast(Intent(VoiceAssistantService.ACTION_PAUSE).setPackage(packageName)) }
                 override fun onDone(utteranceId: String?) { sendBroadcast(Intent(VoiceAssistantService.ACTION_RESUME).setPackage(packageName)) }
