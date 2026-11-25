@@ -128,18 +128,23 @@ class ActionConfirmationActivity : Activity() {
                         .putExtra(CalendarContract.Events.DESCRIPTION, body)
                     val date = Regex("(\\d{1,2})[./](\\d{1,2})[./](\\d{4})").find(title)
                     val time = Regex("\\b([01]?\\d|2[0-3]):([0-5]\\d)\\b").find(title)
-                    if (date != null) {
-                        val day = date.groupValues[1].toInt()
-                        val month = date.groupValues[2].toInt() - 1
-                        val year = date.groupValues[3].toInt()
-                        val start = Calendar.getInstance().apply {
-                            set(year, month, day, 9, 0, 0)
-                            set(Calendar.MILLISECOND, 0)
+                    val hasRelativeDate = title.contains("מחר") || title.contains("היום")
+                    if (date != null || hasRelativeDate) {
+                        val start = Calendar.getInstance()
+                        if (date != null) {
+                            start.set(
+                                date.groupValues[3].toInt(),
+                                date.groupValues[2].toInt() - 1,
+                                date.groupValues[1].toInt(),
+                                9, 0, 0
+                            )
+                        } else if (title.contains("מחר")) {
+                            start.add(Calendar.DAY_OF_YEAR, 1)
                         }
-                        if (time != null) {
-                            start.set(Calendar.HOUR_OF_DAY, time.groupValues[1].toInt())
-                            start.set(Calendar.MINUTE, time.groupValues[2].toInt())
-                        }
+                        start.set(Calendar.HOUR_OF_DAY, time?.groupValues?.get(1)?.toInt() ?: 9)
+                        start.set(Calendar.MINUTE, time?.groupValues?.get(2)?.toInt() ?: 0)
+                        start.set(Calendar.SECOND, 0)
+                        start.set(Calendar.MILLISECOND, 0)
                         val end = start.clone() as Calendar
                         end.add(Calendar.HOUR_OF_DAY, 1)
                         event.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start.timeInMillis)
