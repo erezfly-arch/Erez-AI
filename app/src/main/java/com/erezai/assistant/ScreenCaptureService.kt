@@ -22,6 +22,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import java.io.File
+import java.util.ArrayDeque
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -30,6 +31,7 @@ class ScreenCaptureService : Service() {
         const val ACTION_SCREEN_TEXT = "com.erezai.assistant.SCREEN_TEXT"
         const val EXTRA_SCREEN_TEXT = "screen_text"
         const val EXTRA_SCREEN_IMAGE_PATH = "screen_image_path"
+        const val EXTRA_SCREEN_FRAME_PATHS = "screen_frame_paths"
         private const val FRAME_INTERVAL_MS = 1200L
     }
 
@@ -39,6 +41,7 @@ class ScreenCaptureService : Service() {
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val labeler by lazy { ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS) }
     private val processing = AtomicBoolean(false)
+    private val recentFrames = ArrayDeque<File>()
     // Tesseract is not thread-safe. Initialization and every OCR call share this worker.
     private val ocrWorker = Executors.newSingleThreadExecutor()
     private val hebrewOcr by lazy { HebrewOcr(applicationContext) }
@@ -143,7 +146,8 @@ class ScreenCaptureService : Service() {
                             append("קטגוריות חזותיות כלליות שזוהו (לא תיאור סמנטי מלא):\n").append(lastLabels)
                         }
                     }.take(9000)
-                    val screenFile = File(cacheDir, "erez-latest-screen.jpg")
+                    val frameDir = File(cacheDir, "erez-recent-frames").apply { mkdirs() }
+                    val screenFile = File(frameDir, "frame_" + System.currentTimeMillis() + ".jpg")
                     val imageSaved = try {
                         screenFile.outputStream().buffered().use { output ->
                             bitmap.compress(Bitmap.CompressFormat.JPEG, 82, output)
@@ -152,10 +156,19 @@ class ScreenCaptureService : Service() {
                         Log.w("ErezAI", "Could not persist latest screen frame", e)
                         false
                     }
+                    val framePaths = ArrayList<String>()
+                    if (imageSaved) {
+                        synchronized(recentFrames) {
+                            recentFrames.addLast(screenFile)
+                            while (recentFrames.size > 6) recentFrames.removeFirst().delete()
+                            recentFrames.forEach { framePaths.add(it.absolutePath) }
+                        }
+                    }
                     if (combined.isNotBlank() || imageSaved) {
                         sendBroadcast(Intent(ACTION_SCREEN_TEXT).setPackage(packageName)
                             .putExtra(EXTRA_SCREEN_TEXT, combined)
-                            .putExtra(EXTRA_SCREEN_IMAGE_PATH, if (imageSaved) screenFile.absolutePath else ""))
+                            .putExtra(EXTRA_SCREEN_IMAGE_PATH, if (imageSaved) screenFile.absolutePath else "")
+                            .putStringArrayListExtra(EXTRA_SCREEN_FRAME_PATHS, framePaths))
                     }
                     bitmap.recycle()
                     processing.set(false)
