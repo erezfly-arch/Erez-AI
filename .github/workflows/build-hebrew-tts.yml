@@ -31,7 +31,7 @@ jobs:
               config = json.load(f)
           with open("tokens.txt", "w", encoding="utf-8") as f:
               for phoneme, ids in config["phoneme_id_map"].items():
-                  f.write(f"{phoneme} {ids[0]}\\n")
+                  f.write(f"{phoneme} {ids[0]}\n")
           model = onnx.load(filename)
           metadata = {
               "model_type": "vits",
