@@ -56,7 +56,7 @@ class HebrewOcr(private val context: Context) {
     fun recognize(bitmap: Bitmap): String {
         val engine = api ?: return ""
         engine.setImage(bitmap)
-        return engine.uTF8Text?.trim().orEmpty()
+        return engine.getUTF8Text()?.trim().orEmpty()
     }
 
     fun close() {
