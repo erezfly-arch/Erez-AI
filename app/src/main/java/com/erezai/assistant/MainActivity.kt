@@ -10,7 +10,6 @@ import android.content.IntentFilter
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
-import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.widget.*
@@ -40,18 +39,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             val i = Intent(this, ScreenCaptureService::class.java)
                 .putExtra("resultCode", result.resultCode).putExtra("data", result.data)
             ContextCompat.startForegroundService(this, i)
-            say("שיתוף המסך הופעל. אני מנתח טקסט שמופיע בו. אפשר לעבור לאפליקציה אחרת; המחוון בהתראה יראה שהשיתוף פעיל.")
+            say("שיתוף המסך הופעל. אני מנתח תמונות וטקסט. אפשר לעבור לאפליקציה אחרת; ההתראה תציג שהשיתוף פעיל.")
         } else say("לא הופעל שיתוף מסך.")
     }
 
     private val microphonePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startVoiceService()
         else say("לא ניתן להפעיל שיחה קולית בלי הרשאת מיקרופון.")
-    }
-
-    private val speech = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        val spoken = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (!spoken.isNullOrBlank()) { command.setText(spoken); handle(spoken) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,7 +69,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) tts?.language = Locale("he", "IL")
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale("he", "IL")
+            tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) { sendBroadcast(Intent(VoiceAssistantService.ACTION_PAUSE).setPackage(packageName)) }
+                override fun onDone(utteranceId: String?) { sendBroadcast(Intent(VoiceAssistantService.ACTION_RESUME).setPackage(packageName)) }
+                override fun onError(utteranceId: String?) { sendBroadcast(Intent(VoiceAssistantService.ACTION_RESUME).setPackage(packageName)) }
+                override fun onStop(utteranceId: String?, interrupted: Boolean) { sendBroadcast(Intent(VoiceAssistantService.ACTION_RESUME).setPackage(packageName)) }
+            })
+        }
     }
 
     private fun buildUi() {
@@ -105,12 +107,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             say("התחלתי להכין את מודל הבינה במכשיר. ההורדה עשויה להיות גדולה.")
         })
         root.addView(button("שלח הוראה") { handle(command.text.toString()) })
-        root.addView(button("דבר איתי") {
-            val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "he-IL")
-                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            try { speech.launch(i) } catch (_: Exception) { say("זיהוי דיבור בעברית אינו זמין במכשיר כרגע.") }
-        })
+        root.addView(button("דבר איתי עכשיו · זיהוי עברית מקומי") { requestVoicePermissionAndStart() })
         root.addView(button("הפעל שיחה קולית רציפה ברקע") { requestVoicePermissionAndStart() })
         root.addView(button("עצור שיחה קולית") { stopService(Intent(this, VoiceAssistantService::class.java)); say("בקשת עצירת ההאזנה נשלחה.") })
         root.addView(button("הצג עוזר צף מעל אפליקציות") {
@@ -130,10 +127,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
             say("בהגדרות נגישות אפשר להפעיל את ארז AI. השירות יקרא טקסט גלוי באפליקציות רק לאחר שתפעיל אותו.")
         })
-        root.addView(button("מה אתה רואה במסך?") {
-            if (latestScreenText.isBlank()) say("עדיין לא התקבל טקסט מהמסך. הפעל קודם שיתוף מסך.")
-            else speak("במסך אני מזהה: " + latestScreenText.take(1200))
-        })
+        root.addView(button("מה אתה רואה במסך?") { handle("מה אתה רואה במסך") })
         root.addView(button("עצור צפייה במסך") {
             stopService(Intent(this, ScreenCaptureService::class.java))
             latestScreenText = ""
@@ -170,7 +164,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private fun say(message: String) { if (::log.isInitialized) log.append("\n$message\n") }
     private fun speak(message: String) {
         say(message)
-        tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-utterance")
+        if (tts != null) {
+            sendBroadcast(Intent(VoiceAssistantService.ACTION_PAUSE).setPackage(packageName))
+            val result = tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-utterance")
+            if (result == TextToSpeech.ERROR) sendBroadcast(Intent(VoiceAssistantService.ACTION_RESUME).setPackage(packageName))
+        }
     }
 
     private fun handle(raw: String) {
