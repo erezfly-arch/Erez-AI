@@ -21,13 +21,14 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ScreenCaptureService : Service() {
     companion object {
         const val ACTION_SCREEN_TEXT = "com.erezai.assistant.SCREEN_TEXT"
         const val EXTRA_SCREEN_TEXT = "screen_text"
-        private const val FRAME_INTERVAL_MS = 900L
+        private const val FRAME_INTERVAL_MS = 1200L
     }
 
     private var projection: MediaProjection? = null
@@ -36,7 +37,12 @@ class ScreenCaptureService : Service() {
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val labeler by lazy { ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS) }
     private val processing = AtomicBoolean(false)
+    // Tesseract is not thread-safe. Initialization and every OCR call share this worker.
+    private val ocrWorker = Executors.newSingleThreadExecutor()
+    private val hebrewOcr by lazy { HebrewOcr(applicationContext) }
+    @Volatile private var hebrewOcrReady = false
     @Volatile private var lastText = ""
+    @Volatile private var lastHebrewText = ""
     @Volatile private var lastLabels = ""
     @Volatile private var lastFrameAt = 0L
 
@@ -98,36 +104,51 @@ class ScreenCaptureService : Service() {
         }
         frame.close()
         val input = InputImage.fromBitmap(bitmap, 0)
-        val completed = AtomicBoolean(false)
         val textTask = recognizer.process(input)
         val labelsTask = labeler.process(input)
         textTask.addOnSuccessListener { result ->
             val text = result.text.trim()
             if (text.isNotEmpty()) lastText = text
-        }.addOnFailureListener { Log.w("ErezAI", "OCR frame failed", it) }
+        }.addOnFailureListener { Log.w("ErezAI", "Latin OCR frame failed", it) }
         labelsTask.addOnSuccessListener { labels ->
-            val summary = labels
-                .filter { it.confidence >= 0.55f }
-                .take(8)
+            val summary = labels.filter { it.confidence >= 0.55f }.take(8)
                 .joinToString(", ") { "${it.text} (${(it.confidence * 100).toInt()}%)" }
             if (summary.isNotBlank()) lastLabels = summary
         }.addOnFailureListener { Log.w("ErezAI", "Image labeling failed", it) }
 
         Tasks.whenAllComplete(textTask, labelsTask).addOnCompleteListener {
-            val combined = buildString {
-                if (lastText.isNotBlank()) append("טקסט שזוהה במסך:\n").append(lastText)
-                if (lastLabels.isNotBlank()) {
-                    if (isNotEmpty()) append("\n\n")
-                    append("תוכן חזותי שזוהה בתמונה (תוויות AI):\n").append(lastLabels)
+            // Hebrew OCR is performed off the UI/capture callback thread and is serialized.
+            ocrWorker.execute {
+                try {
+                    if (!hebrewOcrReady) {
+                        hebrewOcrReady = hebrewOcr.initialize()
+                    }
+                    if (hebrewOcrReady) {
+                        val hebrew = hebrewOcr.recognize(bitmap)
+                        if (hebrew.isNotBlank()) lastHebrewText = hebrew
+                    }
+                } catch (e: Exception) {
+                    Log.w("ErezAI", "Hebrew OCR initialization/recognition failed", e)
+                } finally {
+                    val combined = buildString {
+                        if (lastText.isNotBlank()) append("טקסט באנגלית שזוהה במסך:\n").append(lastText)
+                        if (lastHebrewText.isNotBlank()) {
+                            if (isNotEmpty()) append("\n\n")
+                            append("טקסט בעברית שזוהה במסך:\n").append(lastHebrewText)
+                        }
+                        if (lastLabels.isNotBlank()) {
+                            if (isNotEmpty()) append("\n\n")
+                            append("קטגוריות חזותיות כלליות שזוהו (לא תיאור סמנטי מלא):\n").append(lastLabels)
+                        }
+                    }.take(9000)
+                    if (combined.isNotBlank()) {
+                        sendBroadcast(Intent(ACTION_SCREEN_TEXT).setPackage(packageName)
+                            .putExtra(EXTRA_SCREEN_TEXT, combined))
+                    }
+                    bitmap.recycle()
+                    processing.set(false)
                 }
-            }.take(7000)
-            if (combined.isNotBlank() && combined != lastText) {
-                sendBroadcast(Intent(ACTION_SCREEN_TEXT).setPackage(packageName).putExtra(EXTRA_SCREEN_TEXT, combined))
-            } else if (lastText.isNotBlank()) {
-                sendBroadcast(Intent(ACTION_SCREEN_TEXT).setPackage(packageName).putExtra(EXTRA_SCREEN_TEXT, lastText))
             }
-            bitmap.recycle()
-            processing.set(false)
         }
     }
 
@@ -138,7 +159,12 @@ class ScreenCaptureService : Service() {
         projection?.stop()
         recognizer.close()
         labeler.close()
+        try {
+            ocrWorker.execute { try { hebrewOcr.close() } catch (_: Exception) {} }
+            ocrWorker.shutdown()
+        } catch (_: Exception) {}
         super.onDestroy()
     }
+
     override fun onBind(intent: Intent?): IBinder? = null
 }
