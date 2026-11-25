@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
         root.addView(button("דבר איתי") { val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE, "he-IL").putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM); speech.launch(i) })
         root.addView(button("אפשר לעוזר לצפות במסך") { val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager; screenConsent.launch(mgr.createScreenCaptureIntent()) })
         root.addView(button("עצור צפייה במסך") { stopService(Intent(this, ScreenCaptureService::class.java)); say("שיתוף המסך נעצר.") })
-        root.addView(ScrollView(this).apply { addView(log) }, LinearLayout.LayoutParams(-1,0,1f) }
+        root.addView(ScrollView(this).apply { addView(log) }, LinearLayout.LayoutParams(-1, 0, 1f)) }
         setContentView(root)
     }
     private fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { action() } }
