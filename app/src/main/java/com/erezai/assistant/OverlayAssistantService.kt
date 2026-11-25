@@ -170,6 +170,23 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
 
     private fun speak(message: String) {
         statusText?.text = message
+        if (offlineTtsReady && offlineHebrewTts != null) {
+            voiceControl(VoiceAssistantService.ACTION_PAUSE)
+            speechExecutor.execute {
+                try {
+                    offlineHebrewTts?.speak(message)
+                } catch (e: Exception) {
+                    Handler(Looper.getMainLooper()).post {
+                        latestVoiceStatus = "שגיאה בקול המקומי; עובר לקול המכשיר."
+                        statusText?.text = latestVoiceStatus
+                        if (ttsReady) tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-fallback")
+                    }
+                } finally {
+                    voiceControl(VoiceAssistantService.ACTION_RESUME)
+                }
+            }
+            return
+        }
         if (tts == null || !ttsReady) {
             pendingSpeech = message
             return
@@ -517,6 +534,10 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         tts?.stop()
         tts?.shutdown()
         tts = null
+        offlineTtsReady = false
+        try { offlineHebrewTts?.close() } catch (_: Exception) {}
+        offlineHebrewTts = null
+        speechExecutor.shutdownNow()
         bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         bubble = null
         super.onDestroy()
