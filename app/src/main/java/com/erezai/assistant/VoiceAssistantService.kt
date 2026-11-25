@@ -192,7 +192,7 @@ class VoiceAssistantService : Service() {
                             val wakePhrases = listOf("ארז שומע", "היי ארז שומע", "ארז", "היי ארז", "ארז איי איי")
                             val wakePrefix = wakePhrases.firstOrNull { lower == it || lower.startsWith("$it ") }.orEmpty()
                             if (wakePrefix.isNotEmpty()) {
-                                val command = normalized.drop(wakePrefix.length).trim().trimStart(',', ':', '-', ' ')
+                                val command = lower.drop(wakePrefix.length).trim()
                                 if (command.isBlank() && (wakePrefix == "ארז שומע" || wakePrefix == "היי ארז שומע" || wakePrefix == "ארז" || wakePrefix == "היי ארז")) {
                                     wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
                                     sendBroadcast(Intent(ACTION_WAKE_HEARD).setPackage(packageName))
