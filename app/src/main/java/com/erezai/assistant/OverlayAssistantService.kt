@@ -140,7 +140,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    private fun styledButton(label: String, color: Int, onClick: () -> Unit): TextView {
+    private fun styledButton(label: String, color: Int, onClick: (TextView) -> Unit): TextView {
         return TextView(this).apply {
             text = label
             textSize = 14f
@@ -153,7 +153,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 setStroke(dp(1), 0x44FFFFFF)
             }
             elevation = dp(3).toFloat()
-            setOnClickListener { onClick() }
+            setOnClickListener { onClick(this) }
         }
     }
 
