@@ -215,7 +215,7 @@ object ErezAiBrain {
                 }
                 runBlocking {
                     textConversation.sendMessageAsync(summaryPrompt).collect { message ->
-                        if (message.finishReason == null) onChunk(message.toString())
+                        onChunk(message.toString())
                     }
                 }
                 onDone()
