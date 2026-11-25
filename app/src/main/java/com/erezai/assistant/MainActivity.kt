@@ -285,8 +285,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
             t.contains("מייל") || t.contains("אימייל") -> {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(t)?.value.orEmpty()
-                val body = t.substringAfter("תוכן", t.substringAfter("כתוב", t)).trim()
-                confirmAction(ActionConfirmationActivity.TYPE_EMAIL, "כתיבת הודעת דואר", body, recipient = recipient)
+                val subject = t.substringAfter("נושא", "הודעה מארז AI").substringBefore("תוכן").trim().ifBlank { "הודעה מארז AI" }
+                if (ErezAiBrain.isReady()) {
+                    val draft = StringBuilder()
+                    ErezAiBrain.ask(
+                        "נסח גוף של הודעת דואר בעברית לפי בקשת המשתמש. החזר רק את גוף ההודעה, בלי כותרות. בקשה: " + t,
+                        { part -> draft.append(part) },
+                        { runOnUiThread { confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, draft.toString(), recipient = recipient) } },
+                        { error -> runOnUiThread { speak(error) } }
+                    )
+                } else {
+                    val body = t.substringAfter("תוכן", t.substringAfter("כתוב", t)).trim()
+                    confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, body, recipient = recipient)
+                }
             }
             t.contains("התקשר") || t.contains("חייג") -> {
                 val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
