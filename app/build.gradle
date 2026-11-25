@@ -26,4 +26,5 @@ dependencies {
     implementation 'cz.adaptech.tesseract4android:tesseract4android:4.9.0'
     implementation 'com.google.ai.edge.litertlm:litertlm-android:0.19.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2'
+    implementation 'com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.5'
 }
