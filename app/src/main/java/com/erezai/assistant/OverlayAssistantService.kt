@@ -196,7 +196,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 }
             }
             command.contains("וואטסאפ") || command.contains("WhatsApp", true) -> {
-                val body = command.substringAfter("שלח", command).substringAfter("וואטסאפ", command).trim()
+                val body = command.substringAfter("וואטסאפ", command).substringAfter("WhatsApp", command).trim()
+                    .replaceFirst(Regex("^ל[^\\s,:]+:?\\s*"), "")
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(command)?.value.orEmpty()
                 confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", body, phone = phone)
             }
