@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var pendingVoiceStart = false
     private var voiceStartupRequested = false
+    private var screenConsentRequested = false
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -53,7 +54,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 .putExtra("resultCode", result.resultCode).putExtra("data", result.data)
             ContextCompat.startForegroundService(this, i)
             say("שיתוף המסך הופעל. אני מנתח תמונות וטקסט. אפשר לעבור לאפליקציה אחרת; ההתראה תציג שהשיתוף פעיל.")
-        } else say("לא הופעל שיתוף מסך.")
+            startVoiceService()
+        } else {
+            say("שיתוף המסך לא אושר. אפשר להמשיך בשיחה קולית, אבל לא אוכל לראות את המסך.")
+            startVoiceService()
+        }
     }
 
     private val microphonePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -86,7 +91,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onResume()
         if (pendingVoiceStart && android.provider.Settings.canDrawOverlays(this)) {
             pendingVoiceStart = false
-            startVoiceService()
+            requestScreenCaptureConsent()
         }
     }
 
@@ -209,7 +214,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
-        startVoiceService()
+        requestScreenCaptureConsent()
+    }
+
+    private fun requestScreenCaptureConsent() {
+        if (screenConsentRequested) return
+        screenConsentRequested = true
+        say("נדרש אישור Android חד-פעמי לשיתוף המסך. אשר בחלון שיופיע כדי שארז יוכל להבין מה מוצג באפליקציות.")
+        val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        screenConsent.launch(mgr.createScreenCaptureIntent())
     }
 
     private fun startVoiceService() {
@@ -226,7 +239,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             startService(Intent(this, OverlayAssistantService::class.java))
             say("הפעלתי את שירות ההאזנה המקומי. לאחר טעינת מודל הדיבור, הפקודות יתחילו במילת ההפעלה ״ארז שומע?״. אפשר לעצור דרך ההתראה.")
         } catch (_: Exception) {
-            say("לא הצלחתי להפעיל האזנה ברקע. יש לפתוח את האפליקציה ולאשר מיקרופון.")
+            voiceStartupRequested = false
+            say("לא הצלחתי להפעיל האזנה ברקע. בדוק שהרשאת המיקרופון וההתראות מאושרות.")
         }
     }
 
