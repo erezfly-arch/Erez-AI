@@ -43,9 +43,11 @@ object ErezAiBrain {
                     return@execute
                 }
                 val model = File(context.filesDir, MODEL_NAME)
+                val partialModel = File(context.filesDir, MODEL_NAME + ".download")
                 val freeBytes = StatFs(context.filesDir.absolutePath).availableBytes
-                if ((!model.exists() || model.length() != MODEL_BYTES) && freeBytes < MODEL_BYTES + 400_000_000L) {
-                    throw IllegalStateException("נדרש לפנות כ־2.2GB אחסון פנוי כדי להתקין את מוח הבינה המקומי.")
+                val remainingBytes = (MODEL_BYTES - partialModel.length()).coerceAtLeast(0L)
+                if ((!model.exists() || model.length() != MODEL_BYTES) && freeBytes < remainingBytes + 400_000_000L) {
+                    throw IllegalStateException("נדרש לפנות עוד אחסון פנוי כדי להשלים את התקנת מוח הבינה המקומי.")
                 }
                 if (!model.exists() || model.length() != MODEL_BYTES) {
                     onStatus("מוריד מוח AI מקומי עם הבנת תמונות. גודל ההורדה כ־1.78GB. אין תשלום או מכסת שימוש.")
