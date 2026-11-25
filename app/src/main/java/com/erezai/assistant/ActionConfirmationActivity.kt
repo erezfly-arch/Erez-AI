@@ -57,9 +57,9 @@ class ActionConfirmationActivity : Activity() {
             setPadding(0, 0, 0, 24)
         })
         confirmButton = Button(this).apply {
-            text = if (type == TYPE_CALL && phone.isBlank()) "בחר איש קשר" else "אשר והמשך"
+            text = if ((type == TYPE_CALL || type == TYPE_WHATSAPP) && phone.isBlank()) "בחר איש קשר" else "אשר והמשך"
             setOnClickListener {
-                if (type == TYPE_CALL && phone.isBlank() && selectedPhone.isBlank()) {
+                if ((type == TYPE_CALL || type == TYPE_WHATSAPP) && phone.isBlank() && selectedPhone.isBlank()) {
                     try {
                         startActivityForResult(
                             Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI),
@@ -91,8 +91,8 @@ class ActionConfirmationActivity : Activity() {
             if (cursor.moveToFirst()) selectedPhone = cursor.getString(0).orEmpty()
         }
         if (selectedPhone.isNotBlank()) {
-            detailText?.text = "חיוג לאיש קשר נבחר\n$selectedPhone"
-            confirmButton?.text = "אשר חיוג"
+            detailText?.text = "איש קשר נבחר\n$selectedPhone"
+            confirmButton?.text = "אשר והמשך"
         } else {
             Toast.makeText(this, "לא נמצא מספר לאיש הקשר", Toast.LENGTH_LONG).show()
         }
