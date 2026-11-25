@@ -13,6 +13,8 @@ import android.os.Bundle
 import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
+import android.text.util.Linkify
+import android.text.method.LinkMovementMethod
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -114,7 +116,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             hint = "כתוב לי מה לעשות…"; textSize = 17f; setTextColor(-1); setHintTextColor(0xFF9AA8BA.toInt())
         }
         log = TextView(this).apply {
-            text = "שלום. ארז AI ממתין לטעינת המודל המקומי.\n"; setTextColor(-1); textSize = 16f; setPadding(0, 20, 0, 20)
+            text = "שלום. ארז AI ממתין לטעינת המודל המקומי.\n"
+            setTextColor(-1)
+            textSize = 16f
+            setPadding(0, 20, 0, 20)
+            autoLinkMask = Linkify.WEB_URLS
+            movementMethod = LinkMovementMethod.getInstance()
         }
         root.addView(title)
         root.addView(subtitle)
@@ -280,8 +287,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     )
                 }
             }
-            t.contains("וואטסאפ") || t.contains("whatsapp") -> {
-                val messageStart = if (t.contains("וואטסאפ")) t.substringAfter("וואטסאפ") else t.substringAfter("WhatsApp", t, ignoreCase = true)
+            t.contains("וואטסאפ") || t.contains("whatsapp", ignoreCase = true) -> {
+                val messageStart = if (t.contains("וואטסאפ")) t.substringAfter("וואטסאפ") else {
+                    val marker = t.indexOf("whatsapp", ignoreCase = true)
+                    if (marker >= 0) t.substring(marker + "whatsapp".length) else t
+                }
                 val msg = messageStart.trim().replaceFirst(Regex("^ל[^\\s,:]+:?\\s*"), "")
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
                 confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", msg, phone = phone)
