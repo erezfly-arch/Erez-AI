@@ -64,7 +64,7 @@ object ErezAiBrain {
                     EngineConfig(
                         modelPath = model.absolutePath,
                         backend = Backend.CPU(),
-                        visionBackend = Backend.CPU(),
+                        visionBackend = Backend.GPU(),
                         cacheDir = context.cacheDir.absolutePath
                     )
                 )
