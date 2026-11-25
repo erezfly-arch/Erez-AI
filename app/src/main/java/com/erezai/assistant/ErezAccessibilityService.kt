@@ -15,11 +15,13 @@ class ErezAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
-        val root = rootInActiveWindow ?: return
+        val root = rootInActiveWindow
         val collected = StringBuilder()
-        collectVisibleText(root, collected)
+        if (root != null) collectVisibleText(root, collected)
         val text = collected.toString().trim().take(5000)
-        if (text.isNotBlank() && text != lastText) {
+        // Broadcast empty content too: otherwise the overlay can keep showing
+        // text from the previous app or previous screen after navigation.
+        if (text != lastText) {
             lastText = text
             sendBroadcast(Intent(ACTION_ACCESSIBILITY_TEXT)
                 .setPackage(packageName)
