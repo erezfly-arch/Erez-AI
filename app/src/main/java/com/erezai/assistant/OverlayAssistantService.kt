@@ -6,17 +6,22 @@ import android.content.Intent
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.graphics.PixelFormat
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.view.View
+import android.view.Gravity
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.view.Gravity
 import android.view.WindowManager
 import android.text.util.Linkify
 import android.text.method.LinkMovementMethod
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -26,7 +31,8 @@ import java.util.Locale
 
 class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private lateinit var windowManager: WindowManager
-    private var bubble: Button? = null
+    private var bubble: TextView? = null
+    private var voiceListening = false
     private var panel: LinearLayout? = null
     private var latestText = ""
     private var latestAudioText = ""
@@ -112,53 +118,147 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
 
     private fun showBubble() {
         if (bubble != null) return
-        bubble = Button(this).apply {
-            text = "ארז AI"
+        bubble = TextView(this).apply {
+            text = "✨"
+            textSize = 25f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF7C3AED.toInt(), 0xFF2563EB.toInt(), 0xFF06B6D4.toInt())
+            ).apply {
+                shape = GradientDrawable.OVAL
+                setStroke(dp(2), 0xCCFFFFFF.toInt())
+            }
+            elevation = dp(10).toFloat()
+            contentDescription = "פתח את ארז AI"
             setOnClickListener { if (panel == null) showPanel() else hidePanel() }
         }
-        windowManager.addView(bubble, layoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT))
+        windowManager.addView(bubble, layoutParams(dp(58), dp(58)))
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun styledButton(label: String, color: Int, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
+            text = label
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setPadding(dp(14), dp(11), dp(14), dp(11))
+            background = GradientDrawable().apply {
+                setColor(color)
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), 0x44FFFFFF)
+            }
+            elevation = dp(3).toFloat()
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun toggleVoice(button: TextView) {
+        if (voiceListening) {
+            startService(Intent(this, VoiceAssistantService::class.java).setAction(VoiceAssistantService.ACTION_STOP))
+            voiceListening = false
+            button.text = "🎙️ דבר עם ארז"
+            speak("ההאזנה נעצרה.")
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 23 &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            speak("צריך לאשר גישה למיקרופון במסך הראשי של האפליקציה.")
+            return
+        }
+        try {
+            val intent = Intent(this, VoiceAssistantService::class.java)
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+            voiceListening = true
+            button.text = "⏹ עצור האזנה"
+            speak("אני מקשיב. דבר אליי בעברית.")
+        } catch (e: Exception) {
+            speak("לא הצלחתי להפעיל את המיקרופון: ${e.message ?: "שגיאה"}")
+        }
     }
 
     private fun showPanel() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 18)
-            setBackgroundColor(0xEE172337.toInt())
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = GradientDrawable().apply {
+                setColor(0xF2162035.toInt())
+                cornerRadius = dp(26).toFloat()
+                setStroke(dp(1), 0x557C8DFF)
+            }
+            elevation = dp(16).toFloat()
         }
         val heading = TextView(this).apply {
-            text = "ארז AI · העוזר הצף"
-            textSize = 18f
-            setTextColor(-1)
+            text = "✨  ארז AI"
+            textSize = 22f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setPadding(0, 0, 0, dp(8))
+        }
+        val subtitle = TextView(this).apply {
+            text = "אפשר לדבר איתי או לכתוב לי"
+            textSize = 13f
+            setTextColor(0xFFB9C7E8.toInt())
+            setPadding(0, 0, 0, dp(12))
         }
         val input = EditText(this).apply {
-            hint = "מה לעשות?"
-            setTextColor(-1)
-            setHintTextColor(0xFFB7C4D8.toInt())
+            hint = "כתוב כאן מה תרצה לעשות…"
+            setTextColor(Color.WHITE)
+            setHintTextColor(0xFF9EACC5.toInt())
+            textSize = 16f
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = GradientDrawable().apply {
+                setColor(0xFF263550.toInt())
+                cornerRadius = dp(16).toFloat()
+                setStroke(dp(1), 0x667C8DFF)
+            }
         }
         val status = TextView(this).apply {
-            text = if (latestText.isBlank()) "אפשר לדבר או לכתוב לעוזר" else latestText.take(500)
-            setTextColor(-1)
+            text = if (latestText.isBlank()) "מוכן לעזור לך." else latestText.take(500)
+            setTextColor(0xFFE6EDFF.toInt())
             textSize = 13f
             autoLinkMask = Linkify.WEB_URLS
             movementMethod = LinkMovementMethod.getInstance()
+            setPadding(0, dp(12), 0, dp(10))
         }
         statusText = status
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(Button(this).apply {
-            text = "בצע"
-            setOnClickListener { runCommand(input.text.toString()) }
-        })
-        actions.addView(Button(this).apply {
-            text = "מה במסך?"
-            setOnClickListener { runCommand("מה במסך?") }
-        })
-        actions.addView(Button(this).apply { text = "סגור"; setOnClickListener { hidePanel() } })
+
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val mic = styledButton(if (voiceListening) "⏹ עצור האזנה" else "🎙️ דבר עם ארז", 0xFF7C3AED.toInt()) {
+            toggleVoice(it as TextView)
+        }
+        actions.addView(mic, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(6) })
+        actions.addView(styledButton("שלח  ➤", 0xFF2563EB.toInt()) {
+            runCommand(input.text.toString())
+        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(6) })
+
+        val secondary = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        secondary.addView(styledButton("מה במסך?", 0xFF0F766E.toInt()) {
+            runCommand("מה במסך?")
+        }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(5) })
+        secondary.addView(styledButton("סגור", 0xFF475569.toInt()) {
+            hidePanel()
+        }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(5) })
+
         box.addView(heading)
+        box.addView(subtitle)
         box.addView(input)
+        box.addView(actions, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(12) })
+        box.addView(secondary, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(8) })
         box.addView(status)
-        box.addView(actions)
         panel = box
-        windowManager.addView(box, layoutParams((resources.displayMetrics.widthPixels * 0.88f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP, true))
+        windowManager.addView(box, layoutParams((resources.displayMetrics.widthPixels * 0.90f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP, true))
     }
 
     private fun hidePanel() {
