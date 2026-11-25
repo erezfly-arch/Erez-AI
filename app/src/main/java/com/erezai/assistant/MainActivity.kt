@@ -278,11 +278,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     val onChunk: (String) -> Unit = { part -> answer.append(part) }
                     val onDone: () -> Unit = { runOnUiThread { speak(answer.toString().ifBlank { "הניתוח הסתיים." }) } }
                     val onError: (String) -> Unit = { error -> runOnUiThread { speak(error) } }
-                    if (latestScreenFramePaths.size > 1) {
-                        ErezAiBrain.analyzeFrames(prompt, latestScreenFramePaths, onChunk, onDone, onError)
-                    } else {
-                        ErezAiBrain.ask(prompt, onChunk, onDone, onError, snapshot)
-                    }
+                    // Answer from the newest screenshot immediately. Multi-frame video
+                    // analysis is an explicit heavier task, not the default screen response.
+                    ErezAiBrain.ask(prompt, onChunk, onDone, onError, snapshot)
                 }
             }
             t.contains("תגובה") || t.contains("הגב") -> {
