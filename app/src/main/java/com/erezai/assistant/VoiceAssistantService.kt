@@ -146,6 +146,7 @@ class VoiceAssistantService : Service() {
 
             val shortBuffer = ShortArray(1600) // 100 ms
             val utterance = ArrayList<Float>(SAMPLE_RATE * 10)
+            val preRoll = ArrayList<Float>(SAMPLE_RATE / 3)
             var speechStarted = false
             var silenceSamples = 0
             while (running) {
@@ -153,6 +154,7 @@ class VoiceAssistantService : Service() {
                 if (count <= 0) continue
                 if (paused) {
                     utterance.clear()
+                    preRoll.clear()
                     speechStarted = false
                     silenceSamples = 0
                     continue
@@ -164,17 +166,26 @@ class VoiceAssistantService : Service() {
                     energy += sample * sample
                 }
                 val rms = sqrt(energy / count).toFloat()
-                if (rms >= 0.012f) {
+                // A lower threshold helps normal conversational Hebrew, while a short
+                // pre-roll preserves the first syllable that VAD would otherwise clip.
+                if (rms >= 0.0065f) {
+                    if (!speechStarted) {
+                        utterance.addAll(preRoll)
+                        preRoll.clear()
+                    }
                     speechStarted = true
                     silenceSamples = 0
                 } else if (speechStarted) {
                     silenceSamples += count
+                } else {
+                    for (i in 0 until count) preRoll.add(shortBuffer[i] / 32768.0f)
+                    while (preRoll.size > SAMPLE_RATE / 3) preRoll.removeAt(0)
                 }
                 if (speechStarted) {
                     for (i in 0 until count) utterance.add(shortBuffer[i] / 32768.0f)
                 }
 
-                val reachedSilence = silenceSamples >= SAMPLE_RATE * 7 / 10
+                val reachedSilence = silenceSamples >= SAMPLE_RATE * 9 / 10
                 val reachedMaxUtterance = utterance.size >= SAMPLE_RATE * 14
                 if (speechStarted && (reachedSilence || reachedMaxUtterance)) {
                     if (utterance.size >= SAMPLE_RATE / 2) {
