@@ -212,6 +212,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     }
                 }
             }
+            t.contains("תגובה") || t.contains("הגב") -> {
+                if (!ErezAiBrain.isReady()) speak("כדי לנסח תגובה, צריך לטעון קודם את מוח הבינה המקומי.")
+                else {
+                    val draft = StringBuilder()
+                    ErezAiBrain.ask(
+                        "נסח תגובה בעברית טבעית וקצרה שמתאימה לפוסט או לסרטון שמופיעים במסך. החזר רק את נוסח התגובה. בקשת המשתמש: " +
+                            t + "\\nתוכן המסך:\\n" + latestScreenText.take(5000),
+                        { part -> draft.append(part) },
+                        { runOnUiThread { confirmAction(ActionConfirmationActivity.TYPE_COMMENT, "טיוטת תגובה להעתקה", draft.toString()) } },
+                        { error -> runOnUiThread { speak(error) } }
+                    )
+                }
+            }
             t.contains("וואטסאפ") || t.contains("whatsapp") -> {
                 val msg = t.substringAfter("שלח", t).substringAfter("וואטסאפ", t).trim()
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
