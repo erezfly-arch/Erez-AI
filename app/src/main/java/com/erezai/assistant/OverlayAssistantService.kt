@@ -28,6 +28,7 @@ import android.widget.TextView
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
+import java.util.concurrent.Executors
 
 class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private lateinit var windowManager: WindowManager
@@ -44,6 +45,9 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     @Volatile private var ttsReady = false
     @Volatile private var pendingSpeech = ""
+    @Volatile private var offlineTtsReady = false
+    private var offlineHebrewTts: OfflineHebrewTts? = null
+    private val speechExecutor = Executors.newSingleThreadExecutor()
     private val textReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             if (intent?.action == VoiceAssistantService.ACTION_WAKE_HEARD) {
@@ -93,6 +97,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(textReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(textReceiver, filter)
         showBubble()
+        initializeOfflineHebrewVoice()
         if (ErezAiBrain.hasDownloadedModel(this)) {
             ErezAiBrain.prepare(applicationContext) { message ->
                 Handler(Looper.getMainLooper()).post { statusText?.text = message }
@@ -134,6 +139,33 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
 
     private fun voiceControl(action: String) {
         sendBroadcast(Intent(action).setPackage(packageName))
+    }
+
+
+    private fun initializeOfflineHebrewVoice() {
+        speechExecutor.execute {
+            val localVoice = OfflineHebrewTts(applicationContext)
+            try {
+                localVoice.initialize { message ->
+                    Handler(Looper.getMainLooper()).post {
+                        latestVoiceStatus = message
+                        statusText?.text = message
+                    }
+                }
+                offlineHebrewTts = localVoice
+                offlineTtsReady = true
+                Handler(Looper.getMainLooper()).post {
+                    latestVoiceStatus = "הקול העברי הגברי המקומי מוכן."
+                    statusText?.text = latestVoiceStatus
+                }
+            } catch (e: Exception) {
+                try { localVoice.close() } catch (_: Exception) {}
+                Handler(Looper.getMainLooper()).post {
+                    latestVoiceStatus = "הקול המקומי לא זמין כרגע; משתמש בקול העברי של המכשיר."
+                    statusText?.text = latestVoiceStatus
+                }
+            }
+        }
     }
 
     private fun speak(message: String) {
