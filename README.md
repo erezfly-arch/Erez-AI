@@ -4,7 +4,8 @@ Private Android-first personal assistant project. iOS work is intentionally defe
 
 ## Implemented engineering components
 - Native Kotlin Android app (minSdk 26, target SDK 35).
-- Hebrew command entry, Android speech-recognition intent, and Hebrew text-to-speech output.
+- Hebrew command entry, one-shot Android speech-recognition intent, and Hebrew text-to-speech output.
+- User-started foreground microphone service with an ongoing notification, a visible stop action, Hebrew speech recognition, and routing of recognized commands to the floating assistant while another app is in use. Recognition quality and network/offline behavior depend on the device speech provider; this is not yet a two-way conversational AI.
 - Explicit Android MediaProjection consent flow with an ongoing foreground notification and a stop control.
 - On-device ML Kit OCR pipeline for text visible in captured screen frames (Latin-script recognition).
 - Optional Android AccessibilityService that can read visible UI text after the user explicitly enables it in Android Accessibility settings. This is the path for UI text that is not recognized by the OCR model, including many Hebrew UI elements.
@@ -13,7 +14,7 @@ Private Android-first personal assistant project. iOS work is intentionally defe
 
 ## Still required before the app is considered complete
 This is **not yet the finished assistant**:
-- A persistent floating assistant interface and continuous two-way voice conversation while another app (for example Facebook video) is in the foreground.
+- Complete and validate the floating assistant lifecycle and reliable continuous two-way voice conversation while another app (for example Facebook video) is in the foreground.
 - A robust Hebrew-capable visual understanding layer combining accessibility content and image OCR, with safe summaries of videos/images rather than just extracted text.
 - A real conversational reasoning model. The current command handling is rule-based and does not understand arbitrary natural language.
 - A safe action planner that can fill text fields, draft comments, send WhatsApp/email messages, create calendar reminders, and place calls with review/confirmation steps.
