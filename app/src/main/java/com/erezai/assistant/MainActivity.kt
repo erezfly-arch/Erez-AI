@@ -23,13 +23,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private lateinit var log: TextView
     private lateinit var command: EditText
     private var latestScreenText = ""
+    private var latestScreenImagePath = ""
     private var tts: TextToSpeech? = null
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
                 ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
-            if (latestScreenText.isNotBlank()) say("זיהיתי במסך: " + latestScreenText.take(700))
+            latestScreenImagePath = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_IMAGE_PATH).orEmpty()
+            if (latestScreenText.isNotBlank()) say("קיבלתי תוכן מסך לניתוח: " + latestScreenText.take(400))
         }
     }
 
@@ -98,7 +100,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         root.addView(title)
         root.addView(subtitle)
         root.addView(command)
-        root.addView(button("הורד והפעל מוח AI מקומי") {
+        root.addView(button("הורד והפעל מוח AI מקומי כולל הבנת תמונות") {
             ErezAiBrain.prepare(this) { message -> runOnUiThread { say(message) } }
             say("התחלתי להכין את מודל הבינה במכשיר. ההורדה עשויה להיות גדולה.")
         })
@@ -177,8 +179,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         say("אתה: $t")
         when {
             t.contains("מה אתה רואה") || t.contains("תאר את המסך") -> {
-                if (latestScreenText.isBlank()) speak("אין לי כרגע טקסט מהמסך. הפעל שיתוף מסך.")
-                else speak("במסך מופיע הטקסט הבא: " + latestScreenText.take(1200))
+                if (!ErezAiBrain.isReady()) {
+                    speak("מוח הבינה המקומי עדיין לא נטען. יש להשלים את ההורדה הראשונית.")
+                } else {
+                    val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+                    val answer = StringBuilder()
+                    ErezAiBrain.ask(
+                        "תאר בעברית מה מופיע במסך ומה קורה. השתמש בתמונה עצמה ובטקסט שזוהה.\n" + latestScreenText.take(5000),
+                        { part -> answer.append(part) },
+                        { runOnUiThread { speak(answer.toString().ifBlank { "הניתוח הסתיים." }) } },
+                        { error -> runOnUiThread { speak(error) } },
+                        snapshot
+                    )
+                }
             }
             t.contains("וואטסאפ") || t.contains("whatsapp") -> {
                 val msg = t.substringAfter("שלח", t).substringAfter("וואטסאפ", t).trim()
