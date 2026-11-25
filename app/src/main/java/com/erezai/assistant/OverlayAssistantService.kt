@@ -211,8 +211,21 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             }
             command.contains("מייל") || command.contains("אימייל") -> {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(command)?.value.orEmpty()
-                val body = command.substringAfter("תוכן", command.substringAfter("כתוב", command)).trim()
-                confirmAction(ActionConfirmationActivity.TYPE_EMAIL, "כתיבת הודעת דואר", body, recipient = recipient)
+                val subject = command.substringAfter("נושא", "הודעה מארז AI").substringBefore("תוכן").trim().ifBlank { "הודעה מארז AI" }
+                if (ErezAiBrain.isReady()) {
+                    val draft = StringBuilder()
+                    ErezAiBrain.ask(
+                        "נסח גוף של הודעת דואר בעברית לפי בקשת המשתמש. החזר רק את גוף ההודעה, בלי כותרות. בקשה: " + command,
+                        { part -> draft.append(part) },
+                        { Handler(Looper.getMainLooper()).post {
+                            confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, draft.toString(), recipient = recipient)
+                        } },
+                        { error -> Handler(Looper.getMainLooper()).post { speak(error) } }
+                    )
+                } else {
+                    val body = command.substringAfter("תוכן", command.substringAfter("כתוב", command)).trim()
+                    confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, body, recipient = recipient)
+                }
             }
             command.contains("תזכורת") || command.contains("יומן") -> {
                 val title = command.substringAfter("תזכורת", command.substringAfter("יומן", command)).trim()
