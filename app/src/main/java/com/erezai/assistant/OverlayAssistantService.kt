@@ -26,6 +26,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private var bubble: Button? = null
     private var panel: LinearLayout? = null
     private var latestText = ""
+    private var latestScreenImagePath = ""
     private var statusText: TextView? = null
     private var tts: TextToSpeech? = null
     private val textReceiver = object : BroadcastReceiver() {
@@ -35,6 +36,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             } else {
                 latestText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
                     ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
+                latestScreenImagePath = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_IMAGE_PATH).orEmpty()
                 statusText?.text = latestText.take(500)
             }
         }
@@ -137,7 +139,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 if (latestText.isBlank()) {
                     speak("אין כרגע תוכן טקסטואלי מהמסך. אפשר להפעיל שיתוף מסך או נגישות.")
                 } else if (ErezAiBrain.isReady()) {
-                    askAi("נתח וסכם בעברית את התוכן הגלוי במסך. ציין מה קורה ומה חשוב לדעת.\n" + latestText.take(5000))
+                    val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+                    askAi("תאר בעברית מה מופיע במסך, מה קורה בתמונה ומה חשוב לדעת. התבסס על התמונה עצמה וגם על הטקסט שזוהה.\n" + latestText.take(5000), snapshot)
                 } else {
                     speak("זיהיתי טקסט במסך, אבל מנוע הבינה עדיין לא נטען: " + latestText.take(800))
                 }
@@ -180,13 +183,14 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun askAi(prompt: String) {
+    private fun askAi(prompt: String, imageFile: java.io.File? = null) {
         val answer = StringBuilder()
-        speak("אני חושב…")
+        speak("אני מנתח את התוכן…")
         ErezAiBrain.ask(prompt,
             { chunk -> answer.append(chunk) },
             { Handler(Looper.getMainLooper()).post { speak(answer.toString().ifBlank { "לא התקבלה תשובה." }) } },
-            { error -> Handler(Looper.getMainLooper()).post { speak(error) } }
+            { error -> Handler(Looper.getMainLooper()).post { speak(error) } },
+            imageFile
         )
     }
 
