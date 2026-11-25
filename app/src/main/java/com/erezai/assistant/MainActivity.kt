@@ -10,7 +10,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
-import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.widget.*
 import androidx.activity.ComponentActivity
@@ -99,7 +98,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             try { speech.launch(i) } catch (_: Exception) { say("זיהוי דיבור בעברית אינו זמין במכשיר כרגע.") }
         })
-        root.addView(button("הצג עוזר צף מעל אפליקציות") {\n            if (android.provider.Settings.canDrawOverlays(this)) {\n                startService(Intent(this, OverlayAssistantService::class.java))\n                say("העוזר הצף הופעל. אפשר לפתוח אותו גם בזמן שימוש באפליקציות אחרות.")\n            } else {\n                startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))\n                say("יש לאשר הצגה מעל אפליקציות. לאחר מכן חזור והפעל את העוזר הצף.")\n            }\n        })\n        root.addView(button("אפשר לעוזר לצפות במסך") {
+        root.addView(button("הצג עוזר צף מעל אפליקציות") {
+            if (android.provider.Settings.canDrawOverlays(this)) {
+                startService(Intent(this, OverlayAssistantService::class.java))
+                say("העוזר הצף הופעל. אפשר לפתוח אותו גם בזמן שימוש באפליקציות אחרות.")
+            } else {
+                startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                say("יש לאשר הצגה מעל אפליקציות. לאחר מכן חזור והפעל את העוזר הצף.")
+            }
+        })
+        root.addView(button("אפשר לעוזר לצפות במסך") {
             val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             screenConsent.launch(mgr.createScreenCaptureIntent())
         })
