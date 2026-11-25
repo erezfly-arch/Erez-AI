@@ -12,6 +12,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import java.util.Calendar
 
 /**
  * Explicit confirmation gate before handing a consequential action to another app.
@@ -66,7 +67,8 @@ class ActionConfirmationActivity : Activity() {
             when (type) {
                 TYPE_WHATSAPP -> {
                     if (phone.filter { it.isDigit() }.length >= 8) {
-                        val digits = phone.filter { it.isDigit() }
+                        var digits = phone.filter { it.isDigit() }
+                        if (digits.startsWith("0")) digits = "972" + digits.drop(1)
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$digits?text=" + Uri.encode(body))))
                     } else {
                         val share = Intent(Intent.ACTION_SEND).setType("text/plain")
@@ -88,6 +90,25 @@ class ActionConfirmationActivity : Activity() {
                     val event = Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI)
                         .putExtra(CalendarContract.Events.TITLE, title)
                         .putExtra(CalendarContract.Events.DESCRIPTION, body)
+                    val date = Regex("(\\d{1,2})[./](\\d{1,2})[./](\\d{4})").find(title)
+                    val time = Regex("\\b([01]?\\d|2[0-3]):([0-5]\\d)\\b").find(title)
+                    if (date != null) {
+                        val day = date.groupValues[1].toInt()
+                        val month = date.groupValues[2].toInt() - 1
+                        val year = date.groupValues[3].toInt()
+                        val start = Calendar.getInstance().apply {
+                            set(year, month, day, 9, 0, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }
+                        if (time != null) {
+                            start.set(Calendar.HOUR_OF_DAY, time.groupValues[1].toInt())
+                            start.set(Calendar.MINUTE, time.groupValues[2].toInt())
+                        }
+                        val end = start.clone() as Calendar
+                        end.add(Calendar.HOUR_OF_DAY, 1)
+                        event.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start.timeInMillis)
+                        event.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end.timeInMillis)
+                    }
                     startActivity(event)
                 }
                 TYPE_COMMENT -> {
