@@ -208,7 +208,7 @@ class VoiceAssistantService : Service() {
             }
         } catch (e: Exception) {
             Log.e("ErezAI", "Offline voice session failed", e)
-            updateNotification("שגיאה בהאזנה מקומית: ${e.message ?: "לא ידועה"}")
+            if (running) updateNotification("שגיאה בהאזנה מקומית: ${e.message ?: "לא ידועה"}")
             running = false
         } finally {
             try { recorder?.stop() } catch (_: Exception) {}
