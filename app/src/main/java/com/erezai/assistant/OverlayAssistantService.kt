@@ -168,6 +168,27 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     speak("זיהיתי טקסט במסך, אבל מנוע הבינה עדיין לא נטען: " + latestText.take(800))
                 }
             }
+            command.contains("תגובה") || command.contains("הגב") -> {
+                if (!ErezAiBrain.isReady()) {
+                    speak("כדי לנסח תגובה, צריך לטעון קודם את מוח הבינה המקומי.")
+                } else {
+                    val context = (latestText + "\\n" + latestAudioText).take(7000)
+                    val draft = StringBuilder()
+                    speak("אני מנסח תגובה לפי התוכן שמופיע במסך…")
+                    ErezAiBrain.ask(
+                        "נסח תגובה בעברית טבעית וקצרה שמתאימה לפוסט או לסרטון שמופיעים במסך. " +
+                            "אל תמציא עובדות. החזר רק את נוסח התגובה. בקשת המשתמש: " + command +
+                            "\\nתוכן המסך והדיבור שנקלט:\\n" + context,
+                        { part -> draft.append(part) },
+                        {
+                            Handler(Looper.getMainLooper()).post {
+                                confirmAction(ActionConfirmationActivity.TYPE_COMMENT, "טיוטת תגובה להעתקה", draft.toString())
+                            }
+                        },
+                        { error -> Handler(Looper.getMainLooper()).post { speak(error) } }
+                    )
+                }
+            }
             command.contains("וואטסאפ") || command.contains("WhatsApp", true) -> {
                 val body = command.substringAfter("שלח", command).substringAfter("וואטסאפ", command).trim()
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(command)?.value.orEmpty()
@@ -179,7 +200,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 else confirmAction(ActionConfirmationActivity.TYPE_CALL, "חיוג למספר $number", "", phone = number)
             }
             command.contains("מייל") || command.contains("אימייל") -> {
-                val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}").find(command)?.value.orEmpty()
+                val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(command)?.value.orEmpty()
                 val body = command.substringAfter("תוכן", command.substringAfter("כתוב", command)).trim()
                 confirmAction(ActionConfirmationActivity.TYPE_EMAIL, "כתיבת הודעת דואר", body, recipient = recipient)
             }
