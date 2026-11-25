@@ -112,8 +112,10 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 tts?.voice = hebrewMale
                 tts?.setPitch(1.0f)
             } else {
-                // Do not claim a male voice when the installed engine exposes none.
-                tts?.setPitch(0.82f)
+                // Do not fake a male voice by lowering pitch; retain the natural system voice.
+                tts?.setPitch(1.0f)
+                latestVoiceStatus = "קול גברי עברי ייעודי לא זמין במנוע המותקן; משתמש בקול העברי הזמין."
+                statusText?.text = latestVoiceStatus
             }
             tts?.setSpeechRate(0.94f)
             ttsReady = languageResult >= TextToSpeech.LANG_AVAILABLE
