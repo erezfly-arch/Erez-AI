@@ -3,6 +3,8 @@ package com.erezai.assistant
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.Build
@@ -20,11 +22,23 @@ class OverlayAssistantService : Service() {
     private var bubble: Button? = null
     private var panel: LinearLayout? = null
     private var latestText = ""
+    private val textReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            latestText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
+                ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         if (!Settings.canDrawOverlays(this)) { stopSelf(); return }
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val filter = IntentFilter().apply {
+            addAction(ScreenCaptureService.ACTION_SCREEN_TEXT)
+            addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
+        }
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(textReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        else registerReceiver(textReceiver, filter)
         showBubble()
     }
 
@@ -122,6 +136,7 @@ class OverlayAssistantService : Service() {
     }
 
     override fun onDestroy() {
+        try { unregisterReceiver(textReceiver) } catch (_: Exception) {}
         hidePanel()
         bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         bubble = null
