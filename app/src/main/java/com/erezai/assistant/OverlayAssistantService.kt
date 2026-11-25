@@ -16,13 +16,16 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 
-class OverlayAssistantService : Service() {
+class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private lateinit var windowManager: WindowManager
     private var bubble: Button? = null
     private var panel: LinearLayout? = null
     private var latestText = ""
     private var statusText: TextView? = null
+    private var tts: TextToSpeech? = null
     private val textReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             if (intent?.action == VoiceAssistantService.ACTION_RECOGNIZED) {
@@ -37,6 +40,7 @@ class OverlayAssistantService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        tts = TextToSpeech(this, this)
         if (!Settings.canDrawOverlays(this)) { stopSelf(); return }
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val filter = IntentFilter().apply {
@@ -47,6 +51,15 @@ class OverlayAssistantService : Service() {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(textReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(textReceiver, filter)
         showBubble()
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) tts?.language = Locale("he", "IL")
+    }
+
+    private fun speak(message: String) {
+        statusText?.text = message
+        tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-background")
     }
 
     private fun layoutParams(width: Int, height: Int, gravity: Int = Gravity.TOP or Gravity.END, focusable: Boolean = false): WindowManager.LayoutParams {
@@ -116,9 +129,11 @@ class OverlayAssistantService : Service() {
     private fun runCommand(raw: String) {
         val command = raw.trim()
         if (command.isBlank()) return
+        statusText?.text = "שמעתי: $command"
         when {
             command.contains("מה במסך") || command.contains("מה אתה רואה") || command.contains("תאר את המסך") -> {
-                statusText?.text = if (latestText.isBlank()) "אין טקסט קריא במסך כרגע. אפשר להפעיל שיתוף מסך או נגישות." else latestText.take(1200)
+                val answer = if (latestText.isBlank()) "אין טקסט קריא במסך כרגע. אפשר להפעיל שיתוף מסך או נגישות." else "במסך מופיע: " + latestText.take(1200)
+                speak(answer)
             }
             command.contains("וואטסאפ") || command.contains("WhatsApp", true) -> {
                 val share = Intent(Intent.ACTION_SEND).setType("text/plain")
@@ -126,30 +141,39 @@ class OverlayAssistantService : Service() {
                 share.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 try { startActivity(share.setPackage("com.whatsapp")) }
                 catch (_: Exception) { startActivity(Intent.createChooser(share, "שליחה").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                speak("פתחתי את וואטסאפ. בחר איש קשר ואשר את השליחה בעצמך.")
             }
             command.contains("התקשר") || command.contains("חייג") -> {
                 val number = command.filter { it.isDigit() || it == '+' }
                 startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                speak("פתחתי את החייגן. לחץ על כפתור השיחה כדי להתקשר.")
             }
             command.contains("מייל") || command.contains("אימייל") -> {
                 startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                speak("פתחתי את אפליקציית הדואר. אפשר לנסח ולאשר את השליחה.")
             }
             command.contains("תזכורת") || command.contains("יומן") -> {
                 val event = Intent(Intent.ACTION_INSERT).setData(android.provider.CalendarContract.Events.CONTENT_URI)
                     .putExtra(android.provider.CalendarContract.Events.TITLE, command)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(event)
+                speak("פתחתי אירוע חדש ביומן. השלם את הפרטים ושמור.")
             }
             command.contains("חפש") || command.contains("אינטרנט") -> {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(command)))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                speak("פתחתי חיפוש באינטרנט.")
             }
+            else -> speak("שמעתי אותך. עדיין אין לי מנוע בינה מלאכותית מלא, אבל אפשר לבקש ממני לפתוח וואטסאפ, להתקשר, לפתוח דואר, ליצור אירוע או לחפש באינטרנט.")
         }
     }
 
     override fun onDestroy() {
         try { unregisterReceiver(textReceiver) } catch (_: Exception) {}
         hidePanel()
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
         bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         bubble = null
         super.onDestroy()
