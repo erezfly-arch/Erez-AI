@@ -209,9 +209,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "תזכורת חדשה" }, "")
             }
             command.contains("חפש") || command.contains("אינטרנט") -> {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(command)))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                speak("פתחתי חיפוש באינטרנט.")
+                val query = command.substringAfter("חפש", command).substringAfter("באינטרנט", command).trim()
+                searchWeb(query.ifBlank { command })
             }
             else -> {
                 if (ErezAiBrain.isReady()) {
@@ -220,6 +219,46 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 } else speak("מנוע הבינה עדיין לא מוכן. פתח את האפליקציה הראשית ולחץ על הורד והפעל מוח AI מקומי.")
             }
         }
+    }
+
+    private fun searchWeb(query: String) {
+        speak("מחפש ברשת. החיפוש אינו דורש מפתח API או תשלום.")
+        Thread {
+            try {
+                val results = FreeWebSearch.search(query)
+                if (results.isEmpty()) {
+                    Handler(Looper.getMainLooper()).post { speak("לא התקבלו תוצאות חיפוש. אפשר לנסות ניסוח אחר או לפתוח את הדפדפן.") }
+                    return@Thread
+                }
+                val sourceText = results.mapIndexed { index, result ->
+                    "${index + 1}. ${result.title}\n${result.snippet}\nקישור: ${result.url}"
+                }.joinToString("\n\n")
+                if (!ErezAiBrain.isReady()) {
+                    Handler(Looper.getMainLooper()).post {
+                        statusText?.text = sourceText
+                        speak("מצאתי ${results.size} תוצאות. טען את מוח הבינה המקומי כדי לקבל סיכום.")
+                    }
+                    return@Thread
+                }
+                val answer = StringBuilder()
+                ErezAiBrain.ask(
+                    "ענה בעברית על השאלה: " + query +
+                        "\nהשתמש רק במידע הבא. ציין אי-ודאות, ובסוף הצג את הקישורים שסופקו ללא שינוי.\n\n" + sourceText,
+                    { part -> answer.append(part) },
+                    {
+                        Handler(Looper.getMainLooper()).post {
+                            statusText?.text = answer.toString() + "\n\nמקורות:\n" + results.joinToString("\n") { it.title + " — " + it.url }
+                            speak(answer.toString().take(900))
+                        }
+                    },
+                    { error -> Handler(Looper.getMainLooper()).post { speak(error) } }
+                )
+            } catch (e: Exception) {
+                Handler(Looper.getMainLooper()).post {
+                    speak("החיפוש נכשל: ${e.message ?: "שגיאת רשת"}. אפשר לפתוח את הדפדפן.")
+                }
+            }
+        }.start()
     }
 
     private fun confirmAction(
