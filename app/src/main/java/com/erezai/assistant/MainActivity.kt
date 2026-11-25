@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private lateinit var command: EditText
     private var latestScreenText = ""
     private var latestScreenImagePath = ""
+    private var latestScreenFramePaths: List<String> = emptyList()
     private var tts: TextToSpeech? = null
 
     private val screenReceiver = object : BroadcastReceiver() {
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
                 ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
             latestScreenImagePath = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_IMAGE_PATH).orEmpty()
+            latestScreenFramePaths = intent?.getStringArrayListExtra(ScreenCaptureService.EXTRA_SCREEN_FRAME_PATHS)?.toList().orEmpty()
             if (latestScreenText.isNotBlank()) say("קיבלתי תוכן מסך לניתוח: " + latestScreenText.take(400))
         }
     }
@@ -182,13 +184,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 } else {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
                     val answer = StringBuilder()
-                    ErezAiBrain.ask(
-                        "תאר בעברית מה מופיע במסך ומה קורה. השתמש בתמונה עצמה ובטקסט שזוהה.\n" + latestScreenText.take(5000),
-                        { part -> answer.append(part) },
-                        { runOnUiThread { speak(answer.toString().ifBlank { "הניתוח הסתיים." }) } },
-                        { error -> runOnUiThread { speak(error) } },
-                        snapshot
-                    )
+                    val prompt = "תאר בעברית מה מופיע במסך ומה קורה. השתמש בתמונות המסך עצמן ובטקסט שזוהה.\n" + latestScreenText.take(5000)
+                    val onChunk: (String) -> Unit = { part -> answer.append(part) }
+                    val onDone: () -> Unit = { runOnUiThread { speak(answer.toString().ifBlank { "הניתוח הסתיים." }) } }
+                    val onError: (String) -> Unit = { error -> runOnUiThread { speak(error) } }
+                    if (latestScreenFramePaths.size > 1) {
+                        ErezAiBrain.analyzeFrames(prompt, latestScreenFramePaths, onChunk, onDone, onError)
+                    } else {
+                        ErezAiBrain.ask(prompt, onChunk, onDone, onError, snapshot)
+                    }
                 }
             }
             t.contains("וואטסאפ") || t.contains("whatsapp") -> {
