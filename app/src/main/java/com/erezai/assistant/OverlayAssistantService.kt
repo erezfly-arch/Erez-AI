@@ -71,6 +71,11 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(textReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(textReceiver, filter)
         showBubble()
+        if (ErezAiBrain.hasDownloadedModel(this)) {
+            ErezAiBrain.prepare(applicationContext) { message ->
+                Handler(Looper.getMainLooper()).post { statusText?.text = message }
+            }
+        }
     }
 
     override fun onInit(status: Int) {
