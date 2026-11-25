@@ -25,7 +25,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT).orEmpty()
+            latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
+                ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
             if (latestScreenText.isNotBlank()) say("זיהיתי במסך: " + latestScreenText.take(700))
         }
     }
@@ -52,7 +53,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onStart() {
         super.onStart()
-        ContextCompat.registerReceiver(this, screenReceiver, IntentFilter(ScreenCaptureService.ACTION_SCREEN_TEXT), ContextCompat.RECEIVER_NOT_EXPORTED)
+        val filter = IntentFilter().apply {
+            addAction(ScreenCaptureService.ACTION_SCREEN_TEXT)
+            addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
+        }
+        ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     override fun onStop() {
@@ -96,6 +101,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         root.addView(button("אפשר לעוזר לצפות במסך") {
             val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             screenConsent.launch(mgr.createScreenCaptureIntent())
+        })
+        root.addView(button("הפעל הבנת מסך גם בלי שיתוף מסך") {
+            startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            say("בהגדרות נגישות אפשר להפעיל את ארז AI. השירות יקרא טקסט גלוי באפליקציות רק לאחר שתפעיל אותו.")
         })
         root.addView(button("מה אתה רואה במסך?") {
             if (latestScreenText.isBlank()) say("עדיין לא התקבל טקסט מהמסך. הפעל קודם שיתוף מסך.")
