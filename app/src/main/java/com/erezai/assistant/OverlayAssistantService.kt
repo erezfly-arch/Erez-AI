@@ -9,6 +9,8 @@ import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
@@ -132,8 +134,13 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         statusText?.text = "שמעתי: $command"
         when {
             command.contains("מה במסך") || command.contains("מה אתה רואה") || command.contains("תאר את המסך") -> {
-                val answer = if (latestText.isBlank()) "אין טקסט קריא במסך כרגע. אפשר להפעיל שיתוף מסך או נגישות." else "במסך מופיע: " + latestText.take(1200)
-                speak(answer)
+                if (latestText.isBlank()) {
+                    speak("אין כרגע תוכן טקסטואלי מהמסך. אפשר להפעיל שיתוף מסך או נגישות.")
+                } else if (ErezAiBrain.isReady()) {
+                    askAi("נתח וסכם בעברית את התוכן הגלוי במסך. ציין מה קורה ומה חשוב לדעת.\n" + latestText.take(5000))
+                } else {
+                    speak("זיהיתי טקסט במסך, אבל מנוע הבינה עדיין לא נטען: " + latestText.take(800))
+                }
             }
             command.contains("וואטסאפ") || command.contains("WhatsApp", true) -> {
                 val share = Intent(Intent.ACTION_SEND).setType("text/plain")
@@ -164,8 +171,23 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 speak("פתחתי חיפוש באינטרנט.")
             }
-            else -> speak("שמעתי אותך. עדיין אין לי מנוע בינה מלאכותית מלא, אבל אפשר לבקש ממני לפתוח וואטסאפ, להתקשר, לפתוח דואר, ליצור אירוע או לחפש באינטרנט.")
+            else -> {
+                if (ErezAiBrain.isReady()) {
+                    val context = if (latestText.isBlank()) "" else "\n\nתוכן גלוי כרגע במסך (ייתכן שהוא חלקי):\n" + latestText.take(5000)
+                    askAi(command + context)
+                } else speak("מנוע הבינה עדיין לא מוכן. פתח את האפליקציה הראשית ולחץ על הורד והפעל מוח AI מקומי.")
+            }
         }
+    }
+
+    private fun askAi(prompt: String) {
+        val answer = StringBuilder()
+        speak("אני חושב…")
+        ErezAiBrain.ask(prompt,
+            { chunk -> answer.append(chunk) },
+            { Handler(Looper.getMainLooper()).post { speak(answer.toString().ifBlank { "לא התקבלה תשובה." }) } },
+            { error -> Handler(Looper.getMainLooper()).post { speak(error) } }
+        )
     }
 
     override fun onDestroy() {
