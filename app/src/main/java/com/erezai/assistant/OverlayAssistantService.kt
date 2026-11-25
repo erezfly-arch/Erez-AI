@@ -19,6 +19,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
 class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
@@ -58,12 +59,28 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     }
 
     override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) tts?.language = Locale("he", "IL")
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale("he", "IL")
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_PAUSE) }
+                override fun onDone(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_RESUME) }
+                override fun onError(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_RESUME) }
+                override fun onStop(utteranceId: String?, interrupted: Boolean) { voiceControl(VoiceAssistantService.ACTION_RESUME) }
+            })
+        }
+    }
+
+    private fun voiceControl(action: String) {
+        sendBroadcast(Intent(action).setPackage(packageName))
     }
 
     private fun speak(message: String) {
         statusText?.text = message
-        tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-background")
+        if (tts != null) {
+            voiceControl(VoiceAssistantService.ACTION_PAUSE)
+            val result = tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-background")
+            if (result == TextToSpeech.ERROR) voiceControl(VoiceAssistantService.ACTION_RESUME)
+        }
     }
 
     private fun layoutParams(width: Int, height: Int, gravity: Int = Gravity.TOP or Gravity.END, focusable: Boolean = false): WindowManager.LayoutParams {
