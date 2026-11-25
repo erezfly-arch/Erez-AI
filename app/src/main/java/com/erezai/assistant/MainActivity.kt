@@ -10,6 +10,7 @@ import android.content.IntentFilter
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.widget.*
@@ -50,10 +51,17 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         else say("לא ניתן להפעיל שיחה קולית בלי הרשאת מיקרופון.")
     }
 
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) say("בלי הרשאת התראות, ייתכן שלא תראה את בקרת העצירה של שירותי הרקע.")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this, this)
         buildUi()
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     override fun onStart() {
