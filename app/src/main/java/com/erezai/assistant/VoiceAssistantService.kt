@@ -38,12 +38,12 @@ class VoiceAssistantService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, buildNotification())
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             stopSelf()
             return START_NOT_STICKY
         }
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
         if (recognizer == null) {
             recognizer = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(listener) }
         }
