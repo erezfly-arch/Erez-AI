@@ -20,6 +20,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.util.ArrayList
+import java.util.ArrayDeque
 import kotlin.concurrent.thread
 import kotlin.math.sqrt
 
@@ -146,7 +147,7 @@ class VoiceAssistantService : Service() {
 
             val shortBuffer = ShortArray(1600) // 100 ms
             val utterance = ArrayList<Float>(SAMPLE_RATE * 10)
-            val preRoll = ArrayList<Float>(SAMPLE_RATE / 3)
+            val preRoll = ArrayDeque<Float>(SAMPLE_RATE / 3)
             var speechStarted = false
             var silenceSamples = 0
             while (running) {
@@ -178,8 +179,8 @@ class VoiceAssistantService : Service() {
                 } else if (speechStarted) {
                     silenceSamples += count
                 } else {
-                    for (i in 0 until count) preRoll.add(shortBuffer[i] / 32768.0f)
-                    while (preRoll.size > SAMPLE_RATE / 3) preRoll.removeAt(0)
+                    for (i in 0 until count) preRoll.addLast(shortBuffer[i] / 32768.0f)
+                    while (preRoll.size > SAMPLE_RATE / 3) preRoll.removeFirst()
                 }
                 if (speechStarted) {
                     for (i in 0 until count) utterance.add(shortBuffer[i] / 32768.0f)
