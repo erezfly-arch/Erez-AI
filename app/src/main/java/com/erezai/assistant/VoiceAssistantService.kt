@@ -33,6 +33,8 @@ class VoiceAssistantService : Service() {
         const val ACTION_STOP = "com.erezai.assistant.voice.STOP"
         const val ACTION_RECOGNIZED = "com.erezai.assistant.voice.RECOGNIZED"
         const val ACTION_TRANSCRIPT = "com.erezai.assistant.voice.TRANSCRIPT"
+        const val ACTION_STATUS = "com.erezai.assistant.voice.STATUS"
+        const val EXTRA_STATUS = "status"
         const val ACTION_WAKE_HEARD = "com.erezai.assistant.voice.WAKE_HEARD"
         const val EXTRA_TRANSCRIPT = "transcript"
         const val ACTION_PAUSE = "com.erezai.assistant.voice.PAUSE"
@@ -117,6 +119,7 @@ class VoiceAssistantService : Service() {
 
     private fun updateNotification(status: String) {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(status))
+        sendBroadcast(Intent(ACTION_STATUS).setPackage(packageName).putExtra(EXTRA_STATUS, status))
     }
 
     private fun runOfflineListening() {
@@ -169,7 +172,7 @@ class VoiceAssistantService : Service() {
                 val rms = sqrt(energy / count).toFloat()
                 // A lower threshold helps normal conversational Hebrew, while a short
                 // pre-roll preserves the first syllable that VAD would otherwise clip.
-                if (rms >= 0.0065f) {
+                if (rms >= 0.0038f) {
                     if (!speechStarted) {
                         utterance.addAll(preRoll)
                         preRoll.clear()
@@ -197,19 +200,23 @@ class VoiceAssistantService : Service() {
                                     .putExtra(EXTRA_TRANSCRIPT, transcript)
                             )
                             val normalized = transcript.trim()
+                            // Normalize punctuation/quotes as well as spaces. Whisper can
+                            // emit Hebrew wake words with commas, question marks or quotes.
                             val lower = normalized.lowercase()
-                                .replace(Regex("[?!.,:;]+"), " ")
-                                .replace(Regex("\\s+"), " ")
+                                .replace(Regex("[^\p{L}\p{N}\s]+"), " ")
+                                .replace(Regex("\s+"), " ")
                                 .trim()
-                            val wakePhrases = listOf("ארז שומע", "היי ארז שומע", "ארז", "היי ארז", "ארז איי איי")
+                            val wakePhrases = listOf(
+                                "היי ארז שומע", "ארז שומע", "היי ארז", "ארז",
+                                "ארז איי איי", "היי ארז איי איי"
+                            )
                             val wakePrefix = wakePhrases.firstOrNull { lower == it || lower.startsWith("$it ") }.orEmpty()
                             if (wakePrefix.isNotEmpty()) {
-                                val command = lower.drop(wakePrefix.length).trim()
-                                if (command.isBlank() && (wakePrefix == "ארז שומע" || wakePrefix == "היי ארז שומע" || wakePrefix == "ארז" || wakePrefix == "היי ארז")) {
-                                    wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
+                                val command = lower.removePrefix(wakePrefix).trim()
+                                wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
+                                if (command.isBlank()) {
                                     sendBroadcast(Intent(ACTION_WAKE_HEARD).setPackage(packageName))
-                                } else if (command.isNotBlank()) {
-                                    wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
+                                } else {
                                     sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, command))
                                 }
                             } else if (android.os.SystemClock.elapsedRealtime() < wakeArmedUntil) {
