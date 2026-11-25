@@ -207,9 +207,7 @@ class VoiceAssistantService : Service() {
                                 .replace(Regex("[^\\p{L}\\p{N}\\s]+"), " ")
                                 .replace(Regex("\\s+"), " ")
                                 .trim()
-                            val wakePhrases = listOf(
-                                "היי ארז איי איי", "ארז איי איי", "היי ארז שומע", "ארז שומע", "היי ארז", "ארז"
-                            )
+                            val wakePhrases = listOf("היי ארז שומע", "ארז שומע")
                             val wakePrefix = wakePhrases.firstOrNull { lower == it || lower.startsWith("$it ") }.orEmpty()
                             if (wakePrefix.isNotEmpty()) {
                                 val command = lower.removePrefix(wakePrefix).trim()
