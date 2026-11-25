@@ -51,9 +51,13 @@ object ErezAiBrain {
                 }
                 if (!model.exists() || model.length() != MODEL_BYTES) {
                     onStatus("מוריד מוח AI מקומי עם הבנת תמונות. גודל ההורדה כ־1.78GB. אין תשלום או מכסת שימוש.")
+                    var lastPercent = -1
                     downloadModel(model) { downloaded, total ->
                         val percent = if (total > 0) (downloaded * 100 / total).toInt() else -1
-                        onStatus(if (percent >= 0) "מוריד מודל AI מקומי: $percent%" else "מוריד מודל AI: ${downloaded / 1_000_000} MB")
+                        if (percent < 0 || percent != lastPercent) {
+                            lastPercent = percent
+                            onStatus(if (percent >= 0) "מוריד מודל AI מקומי: $percent%" else "מוריד מודל AI: ${downloaded / 1_000_000} MB")
+                        }
                     }
                 } else {
                     onStatus("קובץ המודל כבר קיים. מאמת תקינות…")
