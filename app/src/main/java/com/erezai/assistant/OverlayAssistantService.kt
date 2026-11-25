@@ -158,8 +158,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         statusText?.text = "שמעתי: $command"
         when {
             command.contains("מה במסך") || command.contains("מה אתה רואה") || command.contains("תאר את המסך") -> {
-                if (latestText.isBlank()) {
-                    speak("אין כרגע תוכן טקסטואלי מהמסך. אפשר להפעיל שיתוף מסך או נגישות.")
+                if (latestText.isBlank() && latestScreenImagePath.isBlank()) {
+                    speak("אין כרגע תמונת מסך זמינה. הפעל שיתוף מסך או שירות נגישות.")
                 } else if (ErezAiBrain.isReady()) {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
                     val audioContext = if (latestAudioText.isBlank()) "" else "\n\nדיבור שנקלט מהמיקרופון בסרטון או בסביבה (תמלול אוטומטי, ייתכנו שגיאות):\n" + latestAudioText
