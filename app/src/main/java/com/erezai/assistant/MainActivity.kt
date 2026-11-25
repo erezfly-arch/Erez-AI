@@ -27,13 +27,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == VoiceAssistantService.ACTION_RECOGNIZED) {
-                intent.getStringExtra(VoiceAssistantService.EXTRA_COMMAND)?.let { command.setText(it); handle(it) }
-            } else {
-                latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
-                    ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
-                if (latestScreenText.isNotBlank()) say("זיהיתי במסך: " + latestScreenText.take(700))
-            }
+            latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
+                ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
+            if (latestScreenText.isNotBlank()) say("זיהיתי במסך: " + latestScreenText.take(700))
         }
     }
 
@@ -67,7 +63,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val filter = IntentFilter().apply {
             addAction(ScreenCaptureService.ACTION_SCREEN_TEXT)
             addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
-            addAction(VoiceAssistantService.ACTION_RECOGNIZED)
         }
         ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
@@ -151,9 +146,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun startVoiceService() {
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            say("כדי שהפקודות הקוליות יגיעו לעוזר הצף, יש לאשר תחילה הצגה מעל אפליקציות.")
+            startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            return
+        }
         try {
+            startService(Intent(this, OverlayAssistantService::class.java))
             ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
-            say("הפעלתי האזנה קולית. המיקרופון פעיל כל עוד ההתראה של ארז AI מוצגת. אפשר לעצור דרך ההתראה או מתוך האפליקציה.")
+            say("הפעלתי האזנה קולית. המיקרופון פעיל כל עוד ההתראה של ארז AI מוצגת. הפקודות ינותבו לעוזר הצף. אפשר לעצור דרך ההתראה או מתוך האפליקציה.")
         } catch (_: Exception) {
             say("לא הצלחתי להפעיל האזנה ברקע. יש לפתוח את האפליקציה ולאשר מיקרופון.")
         }
