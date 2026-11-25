@@ -1,0 +1,66 @@
+name: Build offline Hebrew male voice model
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - .github/workflows/build-hebrew-tts.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build-hebrew-tts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download and convert the open Hebrew Piper voice
+        run: |
+          set -euo pipefail
+          mkdir -p work/hebrew
+          cd work/hebrew
+          curl -fL --retry 3 -o he_IL-saspeech-medium.onnx "https://huggingface.co/rhasspy/piper-voices/resolve/main/he/he_IL/saspeech/medium/he_IL-saspeech-medium.onnx"
+          curl -fL --retry 3 -o he_IL-saspeech-medium.onnx.json "https://huggingface.co/rhasspy/piper-voices/resolve/main/he/he_IL/saspeech/medium/he_IL-saspeech-medium.onnx.json"
+          python -m pip install --no-cache-dir onnx==1.17.0
+          python - <<'PY'
+          import json
+          import onnx
+          filename = "he_IL-saspeech-medium.onnx"
+          with open(filename + ".json", "r", encoding="utf-8") as f:
+              config = json.load(f)
+          with open("tokens.txt", "w", encoding="utf-8") as f:
+              for phoneme, ids in config["phoneme_id_map"].items():
+                  f.write(f"{phoneme} {ids[0]}\\n")
+          model = onnx.load(filename)
+          metadata = {
+              "model_type": "vits",
+              "comment": "piper",
+              "language": config["language"]["name_english"],
+              "voice": config["espeak"]["voice"],
+              "has_espeak": 1,
+              "n_speakers": config["num_speakers"],
+              "sample_rate": config["audio"]["sample_rate"],
+          }
+          for key, value in metadata.items():
+              item = model.metadata_props.add()
+              item.key = key
+              item.value = str(value)
+          onnx.save(model, filename)
+          PY
+          cd ../..
+          zip -9 -r hebrew-tts-model.zip work/hebrew/he_IL-saspeech-medium.onnx work/hebrew/tokens.txt
+          mkdir -p build
+          mv hebrew-tts-model.zip build/hebrew-tts-model.zip
+      - name: Publish model release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: hebrew-tts-v1
+          name: Offline Hebrew TTS voice v1
+          body: "Offline Hebrew Piper voice model for Erez AI. Model source: rhasspy/piper-voices, he_IL-saspeech-medium. See the upstream model license and attribution."
+          files: build/hebrew-tts-model.zip
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
