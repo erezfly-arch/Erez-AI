@@ -69,6 +69,7 @@ class VoiceAssistantService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             running = false
+            offlineSpeech?.cancel()
             stopSelf()
             return START_NOT_STICKY
         }
@@ -117,10 +118,10 @@ class VoiceAssistantService : Service() {
 
     private fun runOfflineListening() {
         val asr = OfflineHebrewSpeech(applicationContext)
+        offlineSpeech = asr
         try {
             updateNotification("מוריד מודל עברית מקומי בפעם הראשונה…")
             asr.initialize { message -> updateNotification(message) }
-            offlineSpeech = asr
             updateNotification("מקשיב בעברית · העיבוד מתבצע במכשיר בלבד")
 
             val minBytes = AudioRecord.getMinBufferSize(
@@ -132,7 +133,7 @@ class VoiceAssistantService : Service() {
                 SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
-                maxOf(minBytes * 2, SAMPLE_RATE * 2)
+                maxOf(minBytes * 2, SAMPLE_RATE * 2 * 8)
             )
             if (audio.state != AudioRecord.STATE_INITIALIZED) {
                 audio.release()
@@ -221,6 +222,7 @@ class VoiceAssistantService : Service() {
 
     override fun onDestroy() {
         running = false
+        offlineSpeech?.cancel()
         try { unregisterReceiver(controlReceiver) } catch (_: Exception) {}
         try { recorder?.stop() } catch (_: Exception) {}
         if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE)
