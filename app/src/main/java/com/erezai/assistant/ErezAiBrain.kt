@@ -139,6 +139,83 @@ object ErezAiBrain {
         }
     }
 
+    /**
+     * Analyze recent sampled screen frames one by one (fresh conversation per image),
+     * then summarize their order and changes with the local language model.
+     */
+    fun analyzeFrames(
+        prompt: String,
+        framePaths: List<String>,
+        onChunk: (String) -> Unit,
+        onDone: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        executor.execute {
+            val activeEngine = engine
+            val textConversation = conversation
+            if (!ready || activeEngine == null || textConversation == null) {
+                onError("מוח הבינה המקומי עדיין לא נטען.")
+                return@execute
+            }
+            if (busy) {
+                onError("אני עדיין מסיים את התשובה הקודמת.")
+                return@execute
+            }
+            val usableFrames = framePaths.takeLast(6).map { File(it) }.filter { it.exists() }
+            if (usableFrames.isEmpty()) {
+                onError("אין כרגע תמונות מסך זמינות לניתוח.")
+                return@execute
+            }
+            busy = true
+            try {
+                val observations = StringBuilder()
+                usableFrames.forEachIndexed { index, file ->
+                    val oneFrame = activeEngine.createConversation(
+                        ConversationConfig(
+                            systemInstruction = Contents.of(
+                                "אתה מנתח פריימים של וידאו. תאר בקצרה בעברית רק מה שנראה בתמונה זו, כולל אנשים, חפצים, טקסט ופעולות."
+                            )
+                        )
+                    )
+                    try {
+                        val caption = StringBuilder()
+                        runBlocking {
+                            oneFrame.sendMessageAsync(
+                                Contents.of(
+                                    Content.ImageFile(file.absolutePath),
+                                    Content.Text("תאר את הפריים הזה בצורה מדויקת ותמציתית.")
+                                )
+                            ).collect { message ->
+                                if (message.finishReason == null) caption.append(message.toString())
+                            }
+                        }
+                        observations.append("פריים ").append(index + 1).append(": ")
+                            .append(caption.toString().ifBlank { "לא התקבל תיאור" }).append("\n")
+                    } finally {
+                        try { oneFrame.close() } catch (_: Exception) {}
+                    }
+                }
+                val summaryPrompt = buildString {
+                    append(prompt)
+                    append("\n\nאלה תיאורים של עד שישה פריימים עוקבים מהמסך, לפי סדר הזמן. ")
+                    append("השווה ביניהם, הסבר מה השתנה ומה כנראה מתרחש בסרטון. ")
+                    append("אל תמציא פרטים שאינם מופיעים בתיאורים.\n")
+                    append(observations)
+                }
+                runBlocking {
+                    textConversation.sendMessageAsync(summaryPrompt).collect { message ->
+                        if (message.finishReason == null) onChunk(message.toString())
+                    }
+                }
+                onDone()
+            } catch (e: Exception) {
+                onError(e.message ?: "שגיאה בניתוח פריימים")
+            } finally {
+                busy = false
+            }
+        }
+    }
+
     private fun downloadModel(target: File, progress: (Long, Long) -> Unit) {
         target.parentFile?.mkdirs()
         val temp = File(target.parentFile, target.name + ".download")
