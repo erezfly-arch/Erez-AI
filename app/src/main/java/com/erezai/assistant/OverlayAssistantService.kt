@@ -40,6 +40,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private var latestScreenFramePaths: List<String> = emptyList()
     private var statusText: TextView? = null
     private var tts: TextToSpeech? = null
+    @Volatile private var ttsReady = false
+    @Volatile private var pendingSpeech = ""
     private val textReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             if (intent?.action == VoiceAssistantService.ACTION_WAKE_HEARD) {
@@ -92,16 +94,25 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale("he", "IL")
+            val languageResult = tts?.setLanguage(Locale("he", "IL")) ?: TextToSpeech.LANG_NOT_SUPPORTED
             // Prefer an installed Hebrew male voice when the Android TTS engine exposes one.
             val hebrewMale = tts?.voices?.firstOrNull { voice ->
                 voice.locale.language == "he" &&
                     (voice.name.contains("male", ignoreCase = true) || voice.name.contains("masculine", ignoreCase = true))
             }
-            if (hebrewMale != null) tts?.voice = hebrewMale
-            // Lower pitch gives a less shrill voice when the engine has no explicit male Hebrew voice.
-            tts?.setPitch(0.82f)
+            if (hebrewMale != null) {
+                tts?.voice = hebrewMale
+                tts?.setPitch(1.0f)
+            } else {
+                // Do not claim a male voice when the installed engine exposes none.
+                tts?.setPitch(0.82f)
+            }
             tts?.setSpeechRate(0.94f)
+            ttsReady = languageResult >= TextToSpeech.LANG_AVAILABLE
+            val queued = pendingSpeech
+            pendingSpeech = ""
+            if (queued.isNotBlank() && ttsReady) speak(queued)
+            else if (!ttsReady) statusText?.text = "אין במכשיר קול עברי מותקן. יש להתקין נתוני עברית במנוע הדיבור של Android."
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_PAUSE) }
                 override fun onDone(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_RESUME) }
@@ -117,11 +128,13 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
 
     private fun speak(message: String) {
         statusText?.text = message
-        if (tts != null) {
-            voiceControl(VoiceAssistantService.ACTION_PAUSE)
-            val result = tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-background")
-            if (result == TextToSpeech.ERROR) voiceControl(VoiceAssistantService.ACTION_RESUME)
+        if (tts == null || !ttsReady) {
+            pendingSpeech = message
+            return
         }
+        voiceControl(VoiceAssistantService.ACTION_PAUSE)
+        val result = tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-background")
+        if (result == TextToSpeech.ERROR) voiceControl(VoiceAssistantService.ACTION_RESUME)
     }
 
     private fun layoutParams(width: Int, height: Int, gravity: Int = Gravity.TOP or Gravity.END, focusable: Boolean = false): WindowManager.LayoutParams {
