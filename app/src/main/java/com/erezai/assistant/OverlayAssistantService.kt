@@ -48,7 +48,10 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 intent.getStringExtra(VoiceAssistantService.EXTRA_COMMAND)?.let { runCommand(it) }
             } else if (intent?.action == VoiceAssistantService.ACTION_TRANSCRIPT) {
                 val transcript = intent.getStringExtra(VoiceAssistantService.EXTRA_TRANSCRIPT).orEmpty()
-                if (transcript.isNotBlank()) latestAudioText = (latestAudioText + "\n" + transcript).takeLast(2500)
+                if (transcript.isNotBlank()) {
+                    latestAudioText = (latestAudioText + "\n" + transcript).takeLast(2500)
+                    statusText?.text = "זיהוי קולי: $transcript"
+                }
             } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_STOPPED) {
                 latestText = ""
                 latestScreenImagePath = ""
