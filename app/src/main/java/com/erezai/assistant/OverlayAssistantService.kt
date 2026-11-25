@@ -209,7 +209,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "תזכורת חדשה" }, "")
             }
             command.contains("חפש") || command.contains("אינטרנט") -> {
-                val query = command.substringAfter("חפש", command).substringAfter("באינטרנט", command).trim()
+                val query = command.removePrefix("חפש").removePrefix(" לי").removeSuffix("באינטרנט").trim()
                 searchWeb(query.ifBlank { command })
             }
             else -> {
