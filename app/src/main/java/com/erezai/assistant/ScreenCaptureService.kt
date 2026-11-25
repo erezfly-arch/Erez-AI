@@ -28,6 +28,7 @@ class ScreenCaptureService : Service() {
     companion object {
         const val ACTION_SCREEN_TEXT = "com.erezai.assistant.SCREEN_TEXT"
         const val EXTRA_SCREEN_TEXT = "screen_text"
+        const val EXTRA_SCREEN_IMAGE_PATH = "screen_image_path"
         private const val FRAME_INTERVAL_MS = 1200L
     }
 
@@ -141,9 +142,19 @@ class ScreenCaptureService : Service() {
                             append("קטגוריות חזותיות כלליות שזוהו (לא תיאור סמנטי מלא):\n").append(lastLabels)
                         }
                     }.take(9000)
-                    if (combined.isNotBlank()) {
+                    val screenFile = File(cacheDir, "erez-latest-screen.jpg")
+                    val imageSaved = try {
+                        screenFile.outputStream().buffered().use { output ->
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 82, output)
+                        }
+                    } catch (e: Exception) {
+                        Log.w("ErezAI", "Could not persist latest screen frame", e)
+                        false
+                    }
+                    if (combined.isNotBlank() || imageSaved) {
                         sendBroadcast(Intent(ACTION_SCREEN_TEXT).setPackage(packageName)
-                            .putExtra(EXTRA_SCREEN_TEXT, combined))
+                            .putExtra(EXTRA_SCREEN_TEXT, combined)
+                            .putExtra(EXTRA_SCREEN_IMAGE_PATH, if (imageSaved) screenFile.absolutePath else ""))
                     }
                     bitmap.recycle()
                     processing.set(false)
