@@ -141,8 +141,15 @@ class ActionConfirmationActivity : Activity() {
                         } else if (title.contains("מחר")) {
                             start.add(Calendar.DAY_OF_YEAR, 1)
                         }
-                        start.set(Calendar.HOUR_OF_DAY, time?.groupValues?.get(1)?.toInt() ?: 9)
-                        start.set(Calendar.MINUTE, time?.groupValues?.get(2)?.toInt() ?: 0)
+                        if (time != null) {
+                            start.set(Calendar.HOUR_OF_DAY, time.groupValues[1].toInt())
+                            start.set(Calendar.MINUTE, time.groupValues[2].toInt())
+                        } else if (date == null && title.contains("היום")) {
+                            start.add(Calendar.MINUTE, 15)
+                        } else {
+                            start.set(Calendar.HOUR_OF_DAY, 9)
+                            start.set(Calendar.MINUTE, 0)
+                        }
                         start.set(Calendar.SECOND, 0)
                         start.set(Calendar.MILLISECOND, 0)
                         val end = start.clone() as Calendar
