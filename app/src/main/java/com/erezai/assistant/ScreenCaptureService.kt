@@ -2,6 +2,7 @@ package com.erezai.assistant
 
 import android.app.*
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -11,25 +12,33 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ScreenCaptureService : Service() {
     companion object {
         const val ACTION_SCREEN_TEXT = "com.erezai.assistant.SCREEN_TEXT"
         const val EXTRA_SCREEN_TEXT = "screen_text"
+        private const val FRAME_INTERVAL_MS = 900L
     }
 
     private var projection: MediaProjection? = null
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    private val labeler by lazy { ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS) }
     private val processing = AtomicBoolean(false)
     @Volatile private var lastText = ""
+    @Volatile private var lastLabels = ""
+    @Volatile private var lastFrameAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val channel = "erez_screen_capture"
@@ -40,7 +49,7 @@ class ScreenCaptureService : Service() {
         startForeground(71, NotificationCompat.Builder(this, channel)
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle("ארז AI פעיל")
-            .setContentText("שיתוף המסך וניתוח הטקסט פעילים לבקשתך")
+            .setContentText("ניתוח מסך ותמונות פעיל לבקשתך")
             .setOngoing(true).build())
 
         if (projection != null) return START_NOT_STICKY
@@ -50,6 +59,9 @@ class ScreenCaptureService : Service() {
         if (resultCode == Activity.RESULT_OK && data != null) {
             val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             projection = mgr.getMediaProjection(resultCode, data)
+            projection?.registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() { stopSelf() }
+            }, android.os.Handler(mainLooper))
             val metrics = resources.displayMetrics
             reader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 3)
             reader?.setOnImageAvailableListener({ source -> processLatestFrame(source) }, null)
@@ -62,21 +74,61 @@ class ScreenCaptureService : Service() {
     }
 
     private fun processLatestFrame(source: ImageReader) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastFrameAt < FRAME_INTERVAL_MS) {
+            try { source.acquireLatestImage()?.close() } catch (_: Exception) {}
+            return
+        }
         val frame: Image = try { source.acquireLatestImage() ?: return } catch (_: Exception) { return }
         if (!processing.compareAndSet(false, true)) { frame.close(); return }
-        val input = try { InputImage.fromMediaImage(frame, 0) } catch (e: Exception) {
-            frame.close(); processing.set(false); return
+        lastFrameAt = now
+        var bitmap: Bitmap? = null
+        try {
+            val plane = frame.planes[0]
+            val paddedWidth = frame.width + (plane.rowStride - plane.pixelStride * frame.width) / plane.pixelStride
+            val padded = Bitmap.createBitmap(paddedWidth, frame.height, Bitmap.Config.ARGB_8888)
+            padded.copyPixelsFromBuffer(plane.buffer)
+            bitmap = Bitmap.createBitmap(padded, 0, 0, frame.width, frame.height)
+            padded.recycle()
+        } catch (e: Exception) {
+            Log.w("ErezAI", "Could not convert captured frame", e)
+            frame.close()
+            processing.set(false)
+            return
         }
-        recognizer.process(input)
-            .addOnSuccessListener { result ->
-                val text = result.text.trim()
-                if (text.isNotEmpty() && text != lastText) {
-                    lastText = text
-                    sendBroadcast(Intent(ACTION_SCREEN_TEXT).setPackage(packageName).putExtra(EXTRA_SCREEN_TEXT, text))
+        frame.close()
+        val input = InputImage.fromBitmap(bitmap, 0)
+        val completed = AtomicBoolean(false)
+        val textTask = recognizer.process(input)
+        val labelsTask = labeler.process(input)
+        textTask.addOnSuccessListener { result ->
+            val text = result.text.trim()
+            if (text.isNotEmpty()) lastText = text
+        }.addOnFailureListener { Log.w("ErezAI", "OCR frame failed", it) }
+        labelsTask.addOnSuccessListener { labels ->
+            val summary = labels
+                .filter { it.confidence >= 0.55f }
+                .take(8)
+                .joinToString(", ") { "${it.text} (${(it.confidence * 100).toInt()}%)" }
+            if (summary.isNotBlank()) lastLabels = summary
+        }.addOnFailureListener { Log.w("ErezAI", "Image labeling failed", it) }
+
+        Tasks.whenAllComplete(textTask, labelsTask).addOnCompleteListener {
+            val combined = buildString {
+                if (lastText.isNotBlank()) append("טקסט שזוהה במסך:\n").append(lastText)
+                if (lastLabels.isNotBlank()) {
+                    if (isNotEmpty()) append("\n\n")
+                    append("תוכן חזותי שזוהה בתמונה (תוויות AI):\n").append(lastLabels)
                 }
+            }.take(7000)
+            if (combined.isNotBlank() && combined != lastText) {
+                sendBroadcast(Intent(ACTION_SCREEN_TEXT).setPackage(packageName).putExtra(EXTRA_SCREEN_TEXT, combined))
+            } else if (lastText.isNotBlank()) {
+                sendBroadcast(Intent(ACTION_SCREEN_TEXT).setPackage(packageName).putExtra(EXTRA_SCREEN_TEXT, lastText))
             }
-            .addOnFailureListener { Log.w("ErezAI", "OCR frame failed", it) }
-            .addOnCompleteListener { frame.close(); processing.set(false) }
+            bitmap?.recycle()
+            processing.set(false)
+        }
     }
 
     override fun onDestroy() {
@@ -85,6 +137,7 @@ class ScreenCaptureService : Service() {
         reader?.close()
         projection?.stop()
         recognizer.close()
+        labeler.close()
         super.onDestroy()
     }
     override fun onBind(intent: Intent?): IBinder? = null
