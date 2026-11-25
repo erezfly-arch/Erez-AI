@@ -29,11 +29,18 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
-                ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
-            latestScreenImagePath = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_IMAGE_PATH).orEmpty()
-            latestScreenFramePaths = intent?.getStringArrayListExtra(ScreenCaptureService.EXTRA_SCREEN_FRAME_PATHS)?.toList().orEmpty()
-            if (latestScreenText.isNotBlank()) say("קיבלתי תוכן מסך לניתוח: " + latestScreenText.take(400))
+            if (intent?.action == ScreenCaptureService.ACTION_SCREEN_STOPPED) {
+                latestScreenText = ""
+                latestScreenImagePath = ""
+                latestScreenFramePaths = emptyList()
+                say("שיתוף המסך נעצר.")
+            } else {
+                latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
+                    ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
+                latestScreenImagePath = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_IMAGE_PATH).orEmpty()
+                latestScreenFramePaths = intent?.getStringArrayListExtra(ScreenCaptureService.EXTRA_SCREEN_FRAME_PATHS)?.toList().orEmpty()
+                if (latestScreenText.isNotBlank()) say("קיבלתי תוכן מסך לניתוח: " + latestScreenText.take(400))
+            }
         }
     }
 
@@ -69,6 +76,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val filter = IntentFilter().apply {
             addAction(ScreenCaptureService.ACTION_SCREEN_TEXT)
             addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
+            addAction(ScreenCaptureService.ACTION_SCREEN_STOPPED)
         }
         ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
