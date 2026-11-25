@@ -1,6 +1,8 @@
 package com.erezai.assistant
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -25,9 +27,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
-                ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
-            if (latestScreenText.isNotBlank()) say("זיהיתי במסך: " + latestScreenText.take(700))
+            if (intent?.action == VoiceAssistantService.ACTION_RECOGNIZED) {
+                intent.getStringExtra(VoiceAssistantService.EXTRA_COMMAND)?.let { command.setText(it); handle(it) }
+            } else {
+                latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
+                    ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
+                if (latestScreenText.isNotBlank()) say("זיהיתי במסך: " + latestScreenText.take(700))
+            }
         }
     }
 
@@ -38,6 +44,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             ContextCompat.startForegroundService(this, i)
             say("שיתוף המסך הופעל. אני מנתח טקסט שמופיע בו. אפשר לעבור לאפליקציה אחרת; המחוון בהתראה יראה שהשיתוף פעיל.")
         } else say("לא הופעל שיתוף מסך.")
+    }
+
+    private val microphonePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startVoiceService()
+        else say("לא ניתן להפעיל שיחה קולית בלי הרשאת מיקרופון.")
     }
 
     private val speech = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
@@ -56,6 +67,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val filter = IntentFilter().apply {
             addAction(ScreenCaptureService.ACTION_SCREEN_TEXT)
             addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
+            addAction(VoiceAssistantService.ACTION_RECOGNIZED)
         }
         ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
@@ -98,6 +110,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             try { speech.launch(i) } catch (_: Exception) { say("זיהוי דיבור בעברית אינו זמין במכשיר כרגע.") }
         })
+        root.addView(button("הפעל שיחה קולית רציפה ברקע") { requestVoicePermissionAndStart() })
+        root.addView(button("עצור שיחה קולית") { stopService(Intent(this, VoiceAssistantService::class.java)); say("בקשת עצירת ההאזנה נשלחה.") })
         root.addView(button("הצג עוזר צף מעל אפליקציות") {
             if (android.provider.Settings.canDrawOverlays(this)) {
                 startService(Intent(this, OverlayAssistantService::class.java))
@@ -126,6 +140,23 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         })
         root.addView(ScrollView(this).apply { addView(log) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+    }
+
+    private fun requestVoicePermissionAndStart() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            startVoiceService()
+        } else {
+            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    private fun startVoiceService() {
+        try {
+            ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
+            say("הפעלתי האזנה קולית. המיקרופון פעיל כל עוד ההתראה של ארז AI מוצגת. אפשר לעצור דרך ההתראה או מתוך האפליקציה.")
+        } catch (_: Exception) {
+            say("לא הצלחתי להפעיל האזנה ברקע. יש לפתוח את האפליקציה ולאשר מיקרופון.")
+        }
     }
 
     private fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { action() } }
