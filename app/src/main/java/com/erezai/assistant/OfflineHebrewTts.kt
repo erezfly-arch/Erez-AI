@@ -1,0 +1,179 @@
+package com.erezai.assistant
+
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
+import android.util.Log
+import com.github.csukuangfj.piper.phonemize.piperPhonemizeInitialize
+import com.github.csukuangfj.piper.phonemize.piperPhonemizeText
+import com.k2fsa.sherpa.onnx.GenerationConfig
+import com.k2fsa.sherpa.onnx.OfflineTts
+import com.k2fsa.sherpa.onnx.OfflineTtsConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.zip.ZipInputStream
+
+/**
+ * Offline Hebrew neural speech synthesis using the Piper Hebrew SASpeech voice.
+ * Model files are downloaded once from the project's public release and stored privately.
+ */
+class OfflineHebrewTts(private val context: Context) {
+    private val modelDir = File(context.filesDir, "erez-hebrew-male-tts")
+    private var engine: OfflineTts? = null
+    @Volatile private var connection: HttpURLConnection? = null
+
+    fun initialize(onStatus: (String) -> Unit) {
+        if (engine != null) return
+        modelDir.mkdirs()
+        val model = File(modelDir, "he_IL-saspeech-medium.onnx")
+        val tokens = File(modelDir, "tokens.txt")
+        if (!model.exists() || model.length() < 60_000_000L || !tokens.exists() || tokens.length() < 100L) {
+            onStatus("מוריד קול עברי גברי מקומי בפעם הראשונה…")
+            downloadAndExtract()
+        }
+        if (model.length() < 60_000_000L || tokens.length() < 100L) {
+            throw IllegalStateException("קובצי הקול העברי לא הותקנו במלואם")
+        }
+
+        onStatus("מפעיל מנוע דיבור עברי מקומי…")
+        piperPhonemizeInitialize(context)
+        val config = OfflineTtsConfig(
+            model = OfflineTtsModelConfig(
+                vits = OfflineTtsVitsModelConfig(
+                    model = model.absolutePath,
+                    tokens = tokens.absolutePath
+                ),
+                numThreads = 2,
+                debug = false,
+                provider = "cpu"
+            )
+        )
+        engine = OfflineTts(config = config)
+        onStatus("הקול העברי המקומי מוכן.")
+    }
+
+    @Synchronized
+    fun speak(text: String) {
+        val active = engine ?: throw IllegalStateException("מנוע הדיבור העברי עדיין לא מוכן")
+        val voice = active.lang().ifBlank { "he" }
+        val phonemeResult = piperPhonemizeText(text, voice)
+            ?: throw IllegalStateException("לא ניתן להמיר את הטקסט העברי לדיבור")
+        val codepoints = try {
+            Array(phonemeResult.numSentences) { index -> phonemeResult.getPhonemes(index) }
+        } finally {
+            phonemeResult.close()
+        }
+        val generated = active.generateWithConfig(
+            text = "",
+            config = GenerationConfig(phonemeCodepoints = codepoints)
+        )
+        play(generated.samples, generated.sampleRate)
+    }
+
+    private fun play(samples: FloatArray, sampleRate: Int) {
+        if (samples.isEmpty()) return
+        val pcm = ShortArray(samples.size) { index ->
+            (samples[index].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
+        }
+        val minBuffer = AudioTrack.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        ).coerceAtLeast(4096)
+        val track = AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build()
+            )
+            .setBufferSizeInBytes(maxOf(minBuffer, minOf(pcm.size * 2, sampleRate * 2)))
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
+        try {
+            track.play()
+            var offset = 0
+            while (offset < pcm.size) {
+                val written = track.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
+                if (written <= 0) throw IllegalStateException("נכשלה השמעת הקול העברי")
+                offset += written
+            }
+            track.stop()
+        } finally {
+            track.release()
+        }
+    }
+
+    private fun downloadAndExtract() {
+        val archive = File(context.cacheDir, "hebrew-tts-model.zip")
+        if (archive.exists()) archive.delete()
+        val http = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 30000
+            readTimeout = 180000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "ErezAI-Android")
+        }
+        connection = http
+        try {
+            http.connect()
+            val code = http.responseCode
+            if (code !in 200..299) throw IllegalStateException("הורדת הקול נכשלה: HTTP $code")
+            http.inputStream.use { input ->
+                archive.outputStream().buffered().use { output -> input.copyTo(output) }
+            }
+            if (archive.length() < 50_000_000L) {
+                throw IllegalStateException("קובץ הקול שהתקבל קטן מדי או חלקי")
+            }
+            val model = File(modelDir, "he_IL-saspeech-medium.onnx")
+            val tokens = File(modelDir, "tokens.txt")
+            ZipInputStream(archive.inputStream().buffered()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    val target = when (File(entry.name).name) {
+                        "he_IL-saspeech-medium.onnx" -> model
+                        "tokens.txt" -> tokens
+                        else -> null
+                    }
+                    if (target != null && !entry.isDirectory) {
+                        target.outputStream().buffered().use { output -> zip.copyTo(output) }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+            if (model.length() < 60_000_000L || tokens.length() < 100L) {
+                throw IllegalStateException("ארכיון הקול לא הכיל את כל הקבצים הנדרשים")
+            }
+        } finally {
+            http.disconnect()
+            connection = null
+            archive.delete()
+        }
+    }
+
+    fun cancelDownload() {
+        try { connection?.disconnect() } catch (_: Exception) {}
+    }
+
+    fun close() {
+        try { engine?.release() } catch (e: Exception) { Log.w("ErezAI", "TTS release failed", e) }
+        engine = null
+        cancelDownload()
+    }
+
+    companion object {
+        private const val MODEL_URL =
+            "https://github.com/erezfly-arch/Erez-AI/releases/download/hebrew-tts-v1/hebrew-tts-model.zip"
+    }
+}
