@@ -203,12 +203,11 @@ class VoiceAssistantService : Service() {
                             // Normalize punctuation/quotes as well as spaces. Whisper can
                             // emit Hebrew wake words with commas, question marks or quotes.
                             val lower = normalized.lowercase()
-                                .replace(Regex("[^\p{L}\p{N}\s]+"), " ")
-                                .replace(Regex("\s+"), " ")
+                                .replace(Regex("[^\\p{L}\\p{N}\\s]+"), " ")
+                                .replace(Regex("\\s+"), " ")
                                 .trim()
                             val wakePhrases = listOf(
-                                "היי ארז שומע", "ארז שומע", "היי ארז", "ארז",
-                                "ארז איי איי", "היי ארז איי איי"
+                                "היי ארז איי איי", "ארז איי איי", "היי ארז שומע", "ארז שומע", "היי ארז", "ארז"
                             )
                             val wakePrefix = wakePhrases.firstOrNull { lower == it || lower.startsWith("$it ") }.orEmpty()
                             if (wakePrefix.isNotEmpty()) {
