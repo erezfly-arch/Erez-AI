@@ -202,8 +202,12 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             }
             command.contains("התקשר") || command.contains("חייג") -> {
                 val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(command)?.value.orEmpty()
-                if (number.isBlank()) speak("כדי לחייג, צריך מספר טלפון בפקודה.")
-                else confirmAction(ActionConfirmationActivity.TYPE_CALL, "חיוג למספר $number", "", phone = number)
+                confirmAction(
+                    ActionConfirmationActivity.TYPE_CALL,
+                    if (number.isBlank()) "בחר איש קשר לחיוג" else "חיוג למספר $number",
+                    "",
+                    phone = number
+                )
             }
             command.contains("מייל") || command.contains("אימייל") -> {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(command)?.value.orEmpty()
