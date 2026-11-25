@@ -162,6 +162,45 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun searchWeb(query: String) {
+        say("מחפש ברשת ללא מפתח API…")
+        Thread {
+            try {
+                val results = FreeWebSearch.search(query)
+                if (results.isEmpty()) {
+                    runOnUiThread { speak("לא התקבלו תוצאות חיפוש.") }
+                    return@Thread
+                }
+                val sourceText = results.mapIndexed { index, result ->
+                    "${index + 1}. ${result.title}\n${result.snippet}\nקישור: ${result.url}"
+                }.joinToString("\n\n")
+                if (!ErezAiBrain.isReady()) {
+                    runOnUiThread {
+                        log.append("\\n" + sourceText)
+                        speak("מצאתי ${results.size} תוצאות. טען את מוח הבינה המקומי כדי לקבל סיכום.")
+                    }
+                } else {
+                    val answer = StringBuilder()
+                    ErezAiBrain.ask(
+                        "ענה בעברית על השאלה: " + query +
+                            "\\nהשתמש רק במידע הבא. ציין אי-ודאות והצג את הקישורים שסופקו ללא שינוי.\\n\\n" + sourceText,
+                        { part -> answer.append(part) },
+                        {
+                            runOnUiThread {
+                                log.append("\\n" + answer.toString())
+                                log.append("\\nמקורות:\\n" + results.joinToString("\\n") { it.title + " — " + it.url })
+                                speak(answer.toString().take(900))
+                            }
+                        },
+                        { error -> runOnUiThread { speak(error) } }
+                    )
+                }
+            } catch (e: Exception) {
+                runOnUiThread { speak("החיפוש נכשל: ${e.message ?: "שגיאת רשת"}") }
+            }
+        }.start()
+    }
+
     private fun confirmAction(
         type: String,
         title: String,
@@ -245,9 +284,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "תזכורת חדשה" }, "")
             }
             t.contains("חפש") || t.contains("גוגל") || t.contains("אינטרנט") -> {
-                val q = Uri.encode(t)
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$q")))
-                say("פתחתי תוצאות חיפוש בדפדפן. סיכום תשובות עם מקורות יתווסף בהמשך.")
+                searchWeb(t.removePrefix("חפש").removePrefix(" לי").removeSuffix("באינטרנט").trim())
             }
             else -> {
                 if (ErezAiBrain.isReady()) {
