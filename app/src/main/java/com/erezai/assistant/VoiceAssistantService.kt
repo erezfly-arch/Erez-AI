@@ -31,6 +31,8 @@ class VoiceAssistantService : Service() {
     companion object {
         const val ACTION_STOP = "com.erezai.assistant.voice.STOP"
         const val ACTION_RECOGNIZED = "com.erezai.assistant.voice.RECOGNIZED"
+        const val ACTION_TRANSCRIPT = "com.erezai.assistant.voice.TRANSCRIPT"
+        const val EXTRA_TRANSCRIPT = "transcript"
         const val ACTION_PAUSE = "com.erezai.assistant.voice.PAUSE"
         const val ACTION_RESUME = "com.erezai.assistant.voice.RESUME"
         const val EXTRA_COMMAND = "command"
@@ -176,9 +178,26 @@ class VoiceAssistantService : Service() {
                         val transcript = asr.transcribe(utterance.toFloatArray())
                         if (transcript.isNotBlank()) {
                             sendBroadcast(
-                                Intent(ACTION_RECOGNIZED).setPackage(packageName)
-                                    .putExtra(EXTRA_COMMAND, transcript)
+                                Intent(ACTION_TRANSCRIPT).setPackage(packageName)
+                                    .putExtra(EXTRA_TRANSCRIPT, transcript)
                             )
+                            val normalized = transcript.trim()
+                            val lower = normalized.lowercase()
+                            val wakePrefix = when {
+                                lower.startsWith("היי ארז") -> "היי ארז"
+                                lower.startsWith("ארז איי איי") -> "ארז איי איי"
+                                lower.startsWith("ארז") -> "ארז"
+                                else -> ""
+                            }
+                            if (wakePrefix.isNotEmpty()) {
+                                val command = normalized.drop(wakePrefix.length).trim().trimStart(',', ':', '-', ' ')
+                                if (command.isNotBlank()) {
+                                    sendBroadcast(
+                                        Intent(ACTION_RECOGNIZED).setPackage(packageName)
+                                            .putExtra(EXTRA_COMMAND, command)
+                                    )
+                                }
+                            }
                         }
                     }
                     utterance.clear()
