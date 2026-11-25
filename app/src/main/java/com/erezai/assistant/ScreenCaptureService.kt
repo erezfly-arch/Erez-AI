@@ -82,14 +82,14 @@ class ScreenCaptureService : Service() {
         val frame: Image = try { source.acquireLatestImage() ?: return } catch (_: Exception) { return }
         if (!processing.compareAndSet(false, true)) { frame.close(); return }
         lastFrameAt = now
-        var bitmap: Bitmap? = null
-        try {
+        val bitmap: Bitmap = try {
             val plane = frame.planes[0]
             val paddedWidth = frame.width + (plane.rowStride - plane.pixelStride * frame.width) / plane.pixelStride
             val padded = Bitmap.createBitmap(paddedWidth, frame.height, Bitmap.Config.ARGB_8888)
             padded.copyPixelsFromBuffer(plane.buffer)
-            bitmap = Bitmap.createBitmap(padded, 0, 0, frame.width, frame.height)
+            val cropped = Bitmap.createBitmap(padded, 0, 0, frame.width, frame.height)
             padded.recycle()
+            cropped
         } catch (e: Exception) {
             Log.w("ErezAI", "Could not convert captured frame", e)
             frame.close()
@@ -126,7 +126,7 @@ class ScreenCaptureService : Service() {
             } else if (lastText.isNotBlank()) {
                 sendBroadcast(Intent(ACTION_SCREEN_TEXT).setPackage(packageName).putExtra(EXTRA_SCREEN_TEXT, lastText))
             }
-            bitmap?.recycle()
+            bitmap.recycle()
             processing.set(false)
         }
     }
