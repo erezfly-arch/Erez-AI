@@ -22,10 +22,16 @@ class OverlayAssistantService : Service() {
     private var bubble: Button? = null
     private var panel: LinearLayout? = null
     private var latestText = ""
+    private var statusText: TextView? = null
     private val textReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
-            latestText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
-                ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
+            if (intent?.action == VoiceAssistantService.ACTION_RECOGNIZED) {
+                intent.getStringExtra(VoiceAssistantService.EXTRA_COMMAND)?.let { runCommand(it) }
+            } else {
+                latestText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
+                    ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
+                statusText?.text = latestText.take(500)
+            }
         }
     }
 
@@ -36,6 +42,7 @@ class OverlayAssistantService : Service() {
         val filter = IntentFilter().apply {
             addAction(ScreenCaptureService.ACTION_SCREEN_TEXT)
             addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
+            addAction(VoiceAssistantService.ACTION_RECOGNIZED)
         }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(textReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(textReceiver, filter)
@@ -79,6 +86,7 @@ class OverlayAssistantService : Service() {
             setTextColor(-1)
             textSize = 13f
         }
+        statusText = status
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(Button(this).apply {
             text = "בצע"
@@ -102,12 +110,16 @@ class OverlayAssistantService : Service() {
     private fun hidePanel() {
         panel?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         panel = null
+        statusText = null
     }
 
     private fun runCommand(raw: String) {
         val command = raw.trim()
         if (command.isBlank()) return
         when {
+            command.contains("מה במסך") || command.contains("מה אתה רואה") || command.contains("תאר את המסך") -> {
+                statusText?.text = if (latestText.isBlank()) "אין טקסט קריא במסך כרגע. אפשר להפעיל שיתוף מסך או נגישות." else latestText.take(1200)
+            }
             command.contains("וואטסאפ") || command.contains("WhatsApp", true) -> {
                 val share = Intent(Intent.ACTION_SEND).setType("text/plain")
                     .putExtra(Intent.EXTRA_TEXT, command.substringAfter("שלח", command))
