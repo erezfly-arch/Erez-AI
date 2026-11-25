@@ -279,7 +279,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
             }
             t.contains("וואטסאפ") || t.contains("whatsapp") -> {
-                val msg = t.substringAfter("שלח", t).substringAfter("וואטסאפ", t).trim()
+                val msg = t.substringAfter("וואטסאפ", t).substringAfter("WhatsApp", t).trim()
+                    .replaceFirst(Regex("^ל[^\\s,:]+:?\\s*"), "")
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
                 confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", msg, phone = phone)
             }
