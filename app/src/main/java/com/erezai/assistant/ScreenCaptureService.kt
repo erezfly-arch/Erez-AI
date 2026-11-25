@@ -125,14 +125,19 @@ class ScreenCaptureService : Service() {
         val textTask = recognizer.process(input)
         val labelsTask = labeler.process(input)
         textTask.addOnSuccessListener { result ->
-            val text = result.text.trim()
-            if (text.isNotEmpty()) lastText = text
-        }.addOnFailureListener { Log.w("ErezAI", "Latin OCR frame failed", it) }
+            lastText = result.text.trim()
+        }.addOnFailureListener {
+            lastText = ""
+            Log.w("ErezAI", "Latin OCR frame failed", it)
+        }
         labelsTask.addOnSuccessListener { labels ->
             val summary = labels.filter { it.confidence >= 0.55f }.take(8)
                 .joinToString(", ") { "${it.text} (${(it.confidence * 100).toInt()}%)" }
-            if (summary.isNotBlank()) lastLabels = summary
-        }.addOnFailureListener { Log.w("ErezAI", "Image labeling failed", it) }
+            lastLabels = summary
+        }.addOnFailureListener {
+            lastLabels = ""
+            Log.w("ErezAI", "Image labeling failed", it)
+        }
 
         Tasks.whenAllComplete(textTask, labelsTask).addOnCompleteListener {
             // Hebrew OCR is performed off the UI/capture callback thread and is serialized.
@@ -142,10 +147,12 @@ class ScreenCaptureService : Service() {
                         hebrewOcrReady = hebrewOcr.initialize()
                     }
                     if (hebrewOcrReady) {
-                        val hebrew = hebrewOcr.recognize(bitmap)
-                        if (hebrew.isNotBlank()) lastHebrewText = hebrew
+                        lastHebrewText = hebrewOcr.recognize(bitmap)
+                    } else {
+                        lastHebrewText = ""
                     }
                 } catch (e: Exception) {
+                    lastHebrewText = ""
                     Log.w("ErezAI", "Hebrew OCR initialization/recognition failed", e)
                 } finally {
                     val combined = buildString {
