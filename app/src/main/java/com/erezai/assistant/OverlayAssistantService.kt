@@ -28,10 +28,10 @@ class OverlayAssistantService : Service() {
         showBubble()
     }
 
-    private fun layoutParams(width: Int, height: Int, gravity: Int = Gravity.TOP or Gravity.END): WindowManager.LayoutParams {
+    private fun layoutParams(width: Int, height: Int, gravity: Int = Gravity.TOP or Gravity.END, focusable: Boolean = false): WindowManager.LayoutParams {
         val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
         return WindowManager.LayoutParams(width, height, type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            (if (focusable) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT).apply { this.gravity = gravity; x = 18; y = 220 }
     }
 
@@ -82,7 +82,7 @@ class OverlayAssistantService : Service() {
         box.addView(status)
         box.addView(actions)
         panel = box
-        windowManager.addView(box, layoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        windowManager.addView(box, layoutParams((resources.displayMetrics.widthPixels * 0.88f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP, true))
     }
 
     private fun hidePanel() {
