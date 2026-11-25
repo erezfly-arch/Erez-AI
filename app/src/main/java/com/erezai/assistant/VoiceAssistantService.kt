@@ -62,7 +62,7 @@ class VoiceAssistantService : Service() {
             addAction(ACTION_PAUSE)
             addAction(ACTION_RESUME)
         }
-        if (Build.VERSION.SDK_INT >= 33) registerReceiver(controlReceiver, filter, RECEIVER_NOT_EXPORTED)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(controlReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(controlReceiver, filter)
     }
 
