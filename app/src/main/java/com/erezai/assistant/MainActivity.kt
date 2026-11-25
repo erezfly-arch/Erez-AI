@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             hint = "כתוב לי מה לעשות…"; textSize = 17f; setTextColor(-1); setHintTextColor(0xFF9AA8BA.toInt())
         }
         log = TextView(this).apply {
-            text = "שלום ארז. אני בתהליך בנייה.\n"; setTextColor(-1); textSize = 16f; setPadding(0, 20, 0, 20)
+            text = "שלום. ארז AI ממתין לטעינת המודל המקומי.\n"; setTextColor(-1); textSize = 16f; setPadding(0, 20, 0, 20)
         }
         root.addView(title)
         root.addView(subtitle)
@@ -147,6 +147,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         root.addView(button("עצור צפייה במסך") {
             stopService(Intent(this, ScreenCaptureService::class.java))
             latestScreenText = ""
+            latestScreenImagePath = ""
+            latestScreenFramePaths = emptyList()
             say("שיתוף המסך נעצר.")
         })
         root.addView(ScrollView(this).apply { addView(log) }, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -279,8 +281,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
             }
             t.contains("וואטסאפ") || t.contains("whatsapp") -> {
-                val msg = t.substringAfter("וואטסאפ", t).substringAfter("WhatsApp", t).trim()
-                    .replaceFirst(Regex("^ל[^\\s,:]+:?\\s*"), "")
+                val messageStart = if (t.contains("וואטסאפ")) t.substringAfter("וואטסאפ") else t.substringAfter("WhatsApp", t, ignoreCase = true)
+                val msg = messageStart.trim().replaceFirst(Regex("^ל[^\\s,:]+:?\\s*"), "")
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
                 confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", msg, phone = phone)
             }
