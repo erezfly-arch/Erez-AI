@@ -35,6 +35,11 @@ object ErezAiBrain {
 
     fun isReady(): Boolean = ready
 
+    fun hasDownloadedModel(context: Context): Boolean {
+        val model = File(context.filesDir, MODEL_NAME)
+        return model.exists() && model.length() == MODEL_BYTES
+    }
+
     fun prepare(context: Context, onStatus: (String) -> Unit) {
         executor.execute {
             try {
@@ -64,15 +69,28 @@ object ErezAiBrain {
                     verifySha256(model)
                 }
                 onStatus("המודל אומת. טוען מנוע שפה וראייה לזיכרון…")
-                val created = Engine(
-                    EngineConfig(
-                        modelPath = model.absolutePath,
-                        backend = Backend.CPU(),
-                        visionBackend = Backend.GPU(),
-                        cacheDir = context.cacheDir.absolutePath
-                    )
-                )
-                created.initialize()
+                // Prefer GPU vision for speed, but fall back to CPU so supported
+                // devices without a compatible GPU delegate can still run fully offline.
+                val created = try {
+                    Engine(
+                        EngineConfig(
+                            modelPath = model.absolutePath,
+                            backend = Backend.CPU(),
+                            visionBackend = Backend.GPU(),
+                            cacheDir = context.cacheDir.absolutePath
+                        )
+                    ).also { it.initialize() }
+                } catch (gpuError: Exception) {
+                    onStatus("האצת GPU אינה זמינה במכשיר. מנסה להפעיל את מודל הראייה מקומית על CPU…")
+                    Engine(
+                        EngineConfig(
+                            modelPath = model.absolutePath,
+                            backend = Backend.CPU(),
+                            visionBackend = Backend.CPU(),
+                            cacheDir = context.cacheDir.absolutePath
+                        )
+                    ).also { it.initialize() }
+                }
                 engine = created
                 conversation = created.createConversation(
                     ConversationConfig(
