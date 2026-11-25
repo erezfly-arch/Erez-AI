@@ -28,6 +28,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private var panel: LinearLayout? = null
     private var latestText = ""
     private var latestScreenImagePath = ""
+    private var latestScreenFramePaths: List<String> = emptyList()
     private var statusText: TextView? = null
     private var tts: TextToSpeech? = null
     private val textReceiver = object : BroadcastReceiver() {
@@ -38,6 +39,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 latestText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
                     ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
                 latestScreenImagePath = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_IMAGE_PATH).orEmpty()
+                latestScreenFramePaths = intent?.getStringArrayListExtra(ScreenCaptureService.EXTRA_SCREEN_FRAME_PATHS)?.toList().orEmpty()
                 statusText?.text = latestText.take(500)
             }
         }
@@ -128,9 +130,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         })
         actions.addView(Button(this).apply {
             text = "מה במסך?"
-            setOnClickListener {
-                status.text = if (latestText.isBlank()) "אין עדיין טקסט מהמסך. הפעל שיתוף מסך או שירות נגישות." else latestText.take(1200)
-            }
+            setOnClickListener { runCommand("מה במסך?") }
         })
         actions.addView(Button(this).apply { text = "סגור"; setOnClickListener { hidePanel() } })
         box.addView(heading)
@@ -157,7 +157,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     speak("אין כרגע תוכן טקסטואלי מהמסך. אפשר להפעיל שיתוף מסך או נגישות.")
                 } else if (ErezAiBrain.isReady()) {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
-                    askAi("תאר בעברית מה מופיע במסך, מה קורה בתמונה ומה חשוב לדעת. התבסס על התמונה עצמה וגם על הטקסט שזוהה.\n" + latestText.take(5000), snapshot)
+                    askAi("תאר בעברית מה מופיע במסך, מה קורה בתמונה או בסרטון ומה חשוב לדעת. התבסס על הפריימים ועל הטקסט שזוהה.\n" + latestText.take(5000), snapshot, latestScreenFramePaths)
                 } else {
                     speak("זיהיתי טקסט במסך, אבל מנוע הבינה עדיין לא נטען: " + latestText.take(800))
                 }
@@ -200,15 +200,25 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun askAi(prompt: String, imageFile: java.io.File? = null) {
+    private fun askAi(
+        prompt: String,
+        imageFile: java.io.File? = null,
+        framePaths: List<String> = emptyList()
+    ) {
         val answer = StringBuilder()
         speak("אני מנתח את התוכן…")
-        ErezAiBrain.ask(prompt,
-            { chunk -> answer.append(chunk) },
-            { Handler(Looper.getMainLooper()).post { speak(answer.toString().ifBlank { "לא התקבלה תשובה." }) } },
-            { error -> Handler(Looper.getMainLooper()).post { speak(error) } },
-            imageFile
-        )
+        val onChunk: (String) -> Unit = { chunk -> answer.append(chunk) }
+        val onDone: () -> Unit = {
+            Handler(Looper.getMainLooper()).post { speak(answer.toString().ifBlank { "לא התקבלה תשובה." }) }
+        }
+        val onError: (String) -> Unit = { error ->
+            Handler(Looper.getMainLooper()).post { speak(error) }
+        }
+        if (framePaths.size > 1) {
+            ErezAiBrain.analyzeFrames(prompt, framePaths, onChunk, onDone, onError)
+        } else {
+            ErezAiBrain.ask(prompt, onChunk, onDone, onError, imageFile)
+        }
     }
 
     override fun onDestroy() {
