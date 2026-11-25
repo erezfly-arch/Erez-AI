@@ -32,6 +32,7 @@ class VoiceAssistantService : Service() {
         const val ACTION_STOP = "com.erezai.assistant.voice.STOP"
         const val ACTION_RECOGNIZED = "com.erezai.assistant.voice.RECOGNIZED"
         const val ACTION_TRANSCRIPT = "com.erezai.assistant.voice.TRANSCRIPT"
+        const val ACTION_WAKE_HEARD = "com.erezai.assistant.voice.WAKE_HEARD"
         const val EXTRA_TRANSCRIPT = "transcript"
         const val ACTION_PAUSE = "com.erezai.assistant.voice.PAUSE"
         const val ACTION_RESUME = "com.erezai.assistant.voice.RESUME"
@@ -43,6 +44,7 @@ class VoiceAssistantService : Service() {
 
     @Volatile private var running = false
     @Volatile private var paused = false
+    @Volatile private var wakeArmedUntil = 0L
     private var captureThread: Thread? = null
     private var recorder: AudioRecord? = null
     private var offlineSpeech: OfflineHebrewSpeech? = null
@@ -184,20 +186,23 @@ class VoiceAssistantService : Service() {
                             )
                             val normalized = transcript.trim()
                             val lower = normalized.lowercase()
-                            val wakePrefix = when {
-                                lower.startsWith("היי ארז") -> "היי ארז"
-                                lower.startsWith("ארז איי איי") -> "ארז איי איי"
-                                lower.startsWith("ארז") -> "ארז"
-                                else -> ""
-                            }
+                                .replace(Regex("[?!.,:;]+"), " ")
+                                .replace(Regex("\\s+"), " ")
+                                .trim()
+                            val wakePhrases = listOf("ארז שומע", "היי ארז שומע", "ארז", "היי ארז", "ארז איי איי")
+                            val wakePrefix = wakePhrases.firstOrNull { lower == it || lower.startsWith("$it ") }.orEmpty()
                             if (wakePrefix.isNotEmpty()) {
                                 val command = normalized.drop(wakePrefix.length).trim().trimStart(',', ':', '-', ' ')
-                                if (command.isNotBlank()) {
-                                    sendBroadcast(
-                                        Intent(ACTION_RECOGNIZED).setPackage(packageName)
-                                            .putExtra(EXTRA_COMMAND, command)
-                                    )
+                                if (command.isBlank() && (wakePrefix == "ארז שומע" || wakePrefix == "היי ארז שומע" || wakePrefix == "ארז" || wakePrefix == "היי ארז")) {
+                                    wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
+                                    sendBroadcast(Intent(ACTION_WAKE_HEARD).setPackage(packageName))
+                                } else if (command.isNotBlank()) {
+                                    wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
+                                    sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, command))
                                 }
+                            } else if (android.os.SystemClock.elapsedRealtime() < wakeArmedUntil) {
+                                wakeArmedUntil = 0L
+                                sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, normalized))
                             }
                         }
                     }
