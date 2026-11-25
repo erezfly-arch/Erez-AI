@@ -219,41 +219,55 @@ object ErezAiBrain {
     private fun downloadModel(target: File, progress: (Long, Long) -> Unit) {
         target.parentFile?.mkdirs()
         val temp = File(target.parentFile, target.name + ".download")
-        if (temp.exists()) temp.delete()
+        if (temp.length() > MODEL_BYTES) temp.delete()
+        if (temp.length() == MODEL_BYTES) {
+            if (!sha256(temp).equals(MODEL_SHA256, ignoreCase = true)) temp.delete()
+            else {
+                if (target.exists()) target.delete()
+                if (temp.renameTo(target)) return
+                throw IllegalStateException("לא ניתן לשמור את קובץ המודל")
+            }
+        }
+
+        val offset = temp.length()
+        progress(offset, MODEL_BYTES)
         val connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
             connectTimeout = 30000
             readTimeout = 120000
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", "ErezAI-Android")
+            if (offset > 0) setRequestProperty("Range", "bytes=$offset-")
         }
         try {
             connection.connect()
             val code = connection.responseCode
             if (code !in 200..299) throw IllegalStateException("שרת המודל החזיר HTTP $code")
-            val total = connection.contentLengthLong
+            val append = offset > 0 && code == HttpURLConnection.HTTP_PARTIAL
+            val startAt = if (append) offset else 0L
+            if (!append && temp.exists()) temp.delete()
             connection.inputStream.use { input ->
-                temp.outputStream().buffered().use { output ->
+                java.io.FileOutputStream(temp, append).buffered().use { output ->
                     val buffer = ByteArray(1024 * 1024)
                     var count: Int
-                    var done = 0L
+                    var done = startAt
                     while (input.read(buffer).also { count = it } != -1) {
                         output.write(buffer, 0, count)
                         done += count
-                        progress(done, if (total > 0) total else MODEL_BYTES)
+                        progress(done, MODEL_BYTES)
                     }
                     output.flush()
-                    if (done != MODEL_BYTES) throw IllegalStateException("הורדת המודל לא הושלמה: ${done} bytes")
+                    if (done != MODEL_BYTES) throw IllegalStateException("הורדת המודל לא הושלמה: $done bytes. אפשר להמשיך מהנקודה שבה נעצרה.")
                 }
             }
             val digest = sha256(temp)
             if (!digest.equals(MODEL_SHA256, ignoreCase = true)) {
+                temp.delete()
                 throw IllegalStateException("בדיקת SHA-256 נכשלה; הקובץ לא תקין")
             }
             if (target.exists()) target.delete()
             if (!temp.renameTo(target)) throw IllegalStateException("לא ניתן לשמור את קובץ המודל")
         } finally {
             connection.disconnect()
-            if (temp.exists()) temp.delete()
         }
     }
 
