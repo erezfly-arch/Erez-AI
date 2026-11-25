@@ -14,6 +14,8 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
+import android.text.util.Linkify
+import android.text.method.LinkMovementMethod
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -132,6 +134,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             text = if (latestText.isBlank()) "אפשר לדבר או לכתוב לעוזר" else latestText.take(500)
             setTextColor(-1)
             textSize = 13f
+            autoLinkMask = Linkify.WEB_URLS
+            movementMethod = LinkMovementMethod.getInstance()
         }
         statusText = status
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -196,7 +200,10 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 }
             }
             command.contains("וואטסאפ") || command.contains("WhatsApp", true) -> {
-                val messageStart = if (command.contains("וואטסאפ")) command.substringAfter("וואטסאפ") else command.substringAfter("WhatsApp", command, ignoreCase = true)
+                val messageStart = if (command.contains("וואטסאפ")) command.substringAfter("וואטסאפ") else {
+                    val marker = command.indexOf("WhatsApp", ignoreCase = true)
+                    if (marker >= 0) command.substring(marker + "WhatsApp".length) else command
+                }
                 val body = messageStart.trim().replaceFirst(Regex("^ל[^\\s,:]+:?\\s*"), "")
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(command)?.value.orEmpty()
                 confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", body, phone = phone)
