@@ -28,6 +28,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var latestScreenImagePath = ""
     private var latestScreenFramePaths: List<String> = emptyList()
     private var tts: TextToSpeech? = null
+    private var pendingVoiceStart = false
+    private var voiceStartupRequested = false
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -55,24 +57,36 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     private val microphonePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startVoiceService()
-        else say("לא ניתן להפעיל שיחה קולית בלי הרשאת מיקרופון.")
+        if (granted) ensureOverlayAndStartVoice()
+        else say("כדי שארז יוכל להאזין ולדבר, נדרשת הרשאת מיקרופון. אפשר לאשר אותה בהגדרות Android.")
     }
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) say("בלי הרשאת התראות, ייתכן שלא תראה את בקרת העצירה של שירותי הרקע.")
+        if (!granted) say("התראות לא אושרו; ממשיך בהגדרת ארז AI.")
+        requestMicrophonePermission()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this, this)
         buildUi()
-        if (ErezAiBrain.hasDownloadedModel(this)) {
-            say("נמצא מודל מקומי שהותקן בעבר. טוען אותו אוטומטית…")
-            ErezAiBrain.prepare(this) { message -> runOnUiThread { say(message) } }
-        }
+        // First-run setup is automatic: prepare the local AI model and request
+        // the minimum permissions in sequence instead of asking the user to find
+        // separate download/start buttons.
+        say("מתחיל להכין את ארז AI. הורדת המודל המקומי עשויה להיות גדולה ודורשת חיבור Wi-Fi ואחסון פנוי.")
+        ErezAiBrain.prepare(this) { message -> runOnUiThread { say(message) } }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            requestMicrophonePermission()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (pendingVoiceStart && android.provider.Settings.canDrawOverlays(this)) {
+            pendingVoiceStart = false
+            startVoiceService()
         }
     }
 
@@ -138,9 +152,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         root.addView(title)
         root.addView(subtitle)
         root.addView(command)
-        root.addView(button("הורד והפעל מוח AI מקומי כולל הבנת תמונות") {
-            ErezAiBrain.prepare(this) { message -> runOnUiThread { say(message) } }
-            say("התחלתי להכין את מודל הבינה במכשיר. ההורדה עשויה להיות גדולה.")
+        root.addView(TextView(this).apply {
+            text = "ההתקנה והכנת המודלים מתבצעות אוטומטית ברקע."
+            setTextColor(0xFFB7C4D8.toInt())
+            textSize = 14f
+            setPadding(0, 12, 0, 12)
         })
         root.addView(button("שלח הוראה") { handle(command.text.toString()) })
         root.addView(button("הפעל שיחה קולית רציפה ברקע · עברית מקומית") { requestVoicePermissionAndStart() })
@@ -174,20 +190,36 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         setContentView(root)
     }
 
-    private fun requestVoicePermissionAndStart() {
+    private fun requestMicrophonePermission() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            startVoiceService()
+            ensureOverlayAndStartVoice()
         } else {
             microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
-    private fun startVoiceService() {
+    private fun requestVoicePermissionAndStart() {
+        requestMicrophonePermission()
+    }
+
+    private fun ensureOverlayAndStartVoice() {
         if (!android.provider.Settings.canDrawOverlays(this)) {
-            say("כדי שהפקודות הקוליות יגיעו לעוזר הצף, יש לאשר תחילה הצגה מעל אפליקציות.")
+            pendingVoiceStart = true
+            say("נדרשת הרשאה חד-פעמית להצגת ארז מעל אפליקציות. פתח את מסך ההרשאה של Android ואשר; ארז ימשיך אוטומטית כשתחזור.")
             startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
+        startVoiceService()
+    }
+
+    private fun startVoiceService() {
+        if (voiceStartupRequested) return
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            pendingVoiceStart = true
+            startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            return
+        }
+        voiceStartupRequested = true;
         try {
             ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
             // Keep overlay startup lightweight; do not load heavy AI models here.
