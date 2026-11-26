@@ -132,8 +132,7 @@ object ErezAiBrain {
                     activeEngine.createConversation(
                         ConversationConfig(
                             systemInstruction = Contents.of(
-                                "אתה ארז, עוזר אישי בעברית ישראלית טבעית. נתח את התמונה שנשלחה, " +
-                                "ענה ישירות לבקשת המשתמש, ותאר רק פרטים שניתן לראות בפועל."
+                                "You are Erez, a capable personal AI assistant. Analyze the supplied screen image, answer the user request directly, and describe only details that are actually visible."
                             ),
                             samplerConfig = SamplerConfig(topK = 20, topP = 0.90, temperature = 0.35),
                             maxOutputToken = 256
@@ -194,7 +193,7 @@ object ErezAiBrain {
                     val oneFrame = activeEngine.createConversation(
                         ConversationConfig(
                             systemInstruction = Contents.of(
-                                "אתה מנתח פריימים של וידאו. תאר בקצרה בעברית רק מה שנראה בתמונה זו, כולל אנשים, חפצים, טקסט ופעולות."
+                                "You analyze video frames. Briefly describe only what is visible in this image, including people, objects, text, and actions."
                             )
                         )
                     )
@@ -204,23 +203,23 @@ object ErezAiBrain {
                             oneFrame.sendMessageAsync(
                                 Contents.of(
                                     Content.ImageFile(file.absolutePath),
-                                    Content.Text("תאר את הפריים הזה בצורה מדויקת ותמציתית.")
+                                    Content.Text("Describe this frame accurately and concisely.")
                                 )
                             ).collect { message ->
                                 caption.append(message.toString())
                             }
                         }
-                        observations.append("פריים ").append(index + 1).append(": ")
-                            .append(caption.toString().ifBlank { "לא התקבל תיאור" }).append("\n")
+                        observations.append("Frame ").append(index + 1).append(": ")
+                            .append(caption.toString().ifBlank { "No description returned" }).append("\n")
                     } finally {
                         try { oneFrame.close() } catch (_: Exception) {}
                     }
                 }
                 val summaryPrompt = buildString {
                     append(prompt)
-                    append("\n\nאלה תיאורים של עד שישה פריימים עוקבים מהמסך, לפי סדר הזמן. ")
-                    append("השווה ביניהם, הסבר מה השתנה ומה כנראה מתרחש בסרטון. ")
-                    append("אל תמציא פרטים שאינם מופיעים בתיאורים.\n")
+                    append("\n\nThese are descriptions of up to six consecutive screen frames in chronological order. ")
+                    append("Compare them, explain what changed, and infer what is happening in the video. ")
+                    append("Do not invent details that are not present in the descriptions.\n")
                     append(observations)
                 }
                 runBlocking {
@@ -256,13 +255,7 @@ object ErezAiBrain {
             val chat = candidate.createConversation(
                 ConversationConfig(
                     systemInstruction = Contents.of(
-                        "אתה ארז, עוזר אישי חכם של המשתמש. דבר תמיד בעברית ישראלית טבעית, " +
-                            "בסגנון שיחה אנושי, ישיר, ברור ולא רובוטי. הבן הוראות בעברית מדוברת, " +
-                            "כולל סלנג ושגיאות תמלול קלות. ענה קצר ולעניין, בלי לחזור על השאלה. " +
-                            "אם המשתמש מבקש מידע על המסך, התבסס על התמונה והטקסט שסופקו; " +
-                            "אם אין תמונה או מידע מספיק, אמור זאת במפורש ואל תנחש. " +
-                            "אל תטען שביצעת פעולה שלא ביצעת. אם חסר פרט הכרחי שאל שאלה אחת. " +
-                            "לפני שליחת הודעות, פרסום, שיחות או שינויי יומן דרוש אישור מפורש."
+                        "You are Erez, the user personal AI assistant. Always communicate in natural, fluent English. Be conversational, direct, clear, and human—not robotic. Understand everyday spoken English, slang, and minor transcription errors. Keep answers concise and do not repeat the question. When asked about the phone screen, rely only on the supplied screenshot and visible text. If screen context is missing or insufficient, say so clearly and never guess. Never claim an action was completed unless it actually was. Ask only one question when essential information is missing. Require explicit confirmation before sending messages, publishing, placing calls, or changing calendar events."
                     ),
                     samplerConfig = SamplerConfig(topK = 20, topP = 0.90, temperature = 0.35),
                     maxOutputToken = 256
