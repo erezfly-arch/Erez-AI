@@ -174,7 +174,7 @@ object ErezAiBrain {
             val activeEngine = engine
             val textConversation = conversation
             if (!ready || activeEngine == null || textConversation == null) {
-                onError("מוח הבינה המקומי עדיין לא נטען.")
+                onError("The local AI brain is not ready yet.")
                 return@execute
             }
             if (busy) {
