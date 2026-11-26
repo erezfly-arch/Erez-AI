@@ -72,6 +72,9 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 statusText?.text = "Screen sharing stopped."
             } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_CAPTURE_DONE) {
                 statusText?.text = "One-shot screen capture complete."
+            } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_CAPTURE_FAILED) {
+                pendingScreenCommand = ""
+                speak("Screen access was not approved. I cannot read the current screen.")
             } else {
                 latestText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
                     ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
@@ -103,6 +106,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             addAction(VoiceAssistantService.ACTION_STATUS)
             addAction(ScreenCaptureService.ACTION_SCREEN_STOPPED)
             addAction(ScreenCaptureService.ACTION_SCREEN_CAPTURE_DONE)
+            addAction(ScreenCaptureService.ACTION_SCREEN_CAPTURE_FAILED)
         }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(textReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(textReceiver, filter)
