@@ -63,7 +63,7 @@ class ScreenCaptureService : Service() {
         val channel = "erez_screen_capture"
         if (Build.VERSION.SDK_INT >= 26) {
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel(channel, "שיתוף מסך פעיל", NotificationManager.IMPORTANCE_LOW))
+            manager.createNotificationChannel(NotificationChannel(channel, "Screen sharing active", NotificationManager.IMPORTANCE_LOW))
         }
         val stopIntent = PendingIntent.getService(
             this, 71, Intent(this, ScreenCaptureService::class.java).setAction(ACTION_STOP),
@@ -71,10 +71,10 @@ class ScreenCaptureService : Service() {
         )
         startForeground(71, NotificationCompat.Builder(this, channel)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("ארז AI פעיל")
-            .setContentText("ניתוח מסך ותמונות פעיל לבקשתך")
+            .setContentTitle("Erez AI active")
+            .setContentText("Screen and image analysis active by request")
             .setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause, "עצור שיתוף מסך", stopIntent)
+            .addAction(android.R.drawable.ic_media_pause, "Stop screen sharing", stopIntent)
             .build())
 
         if (projection != null) return START_NOT_STICKY
@@ -166,10 +166,10 @@ class ScreenCaptureService : Service() {
                     if (!hebrewOcrReady) hebrewOcrReady = hebrewOcr.initialize()
                     lastHebrewText = if (hebrewOcrReady) hebrewOcr.recognize(bitmap) else ""
                     val combined = buildString {
-                        if (lastText.isNotBlank()) append("טקסט שזוהה במסך:\n").append(lastText)
+                        if (lastText.isNotBlank()) append("Recognized screen text:\n").append(lastText)
                         if (lastHebrewText.isNotBlank()) {
                             if (isNotEmpty()) append("\n\n")
-                            append("טקסט בעברית שזוהה במסך:\n").append(lastHebrewText)
+                            append("Recognized Hebrew text:\n").append(lastHebrewText)
                         }
                     }.take(5000)
 
