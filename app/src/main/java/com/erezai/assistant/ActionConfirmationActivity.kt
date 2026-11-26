@@ -38,7 +38,7 @@ class ActionConfirmationActivity : Activity() {
             setBackgroundColor(0xFF101827.toInt())
         }
         root.addView(TextView(this).apply {
-            text = "אישור פעולה · ארז AI"
+            text = "Action confirmation · Erez AI"
             textSize = 24f
             setTextColor(-1)
             gravity = Gravity.CENTER
@@ -57,7 +57,7 @@ class ActionConfirmationActivity : Activity() {
             setPadding(0, 0, 0, 24)
         })
         confirmButton = Button(this).apply {
-            text = if ((type == TYPE_CALL || type == TYPE_WHATSAPP) && phone.isBlank()) "בחר איש קשר" else "אשר והמשך"
+            text = if ((type == TYPE_CALL || type == TYPE_WHATSAPP) && phone.isBlank()) "Choose contact" else "Confirm and continue"
             setOnClickListener {
                 if ((type == TYPE_CALL || type == TYPE_WHATSAPP) && phone.isBlank() && selectedPhone.isBlank()) {
                     try {
@@ -66,7 +66,7 @@ class ActionConfirmationActivity : Activity() {
                             REQUEST_PHONE
                         )
                     } catch (_: Exception) {
-                        Toast.makeText(this@ActionConfirmationActivity, "לא ניתן לפתוח אנשי קשר", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@ActionConfirmationActivity, "Could not open contacts", Toast.LENGTH_LONG).show()
                     }
                 } else {
                     executeAction(type, title, body, recipient, selectedPhone.ifBlank { phone })
@@ -75,7 +75,7 @@ class ActionConfirmationActivity : Activity() {
         }
         root.addView(confirmButton)
         root.addView(Button(this).apply {
-            text = "ביטול"
+            text = "Cancel"
             setOnClickListener { finish() }
         })
         setContentView(root)
@@ -91,10 +91,10 @@ class ActionConfirmationActivity : Activity() {
             if (cursor.moveToFirst()) selectedPhone = cursor.getString(0).orEmpty()
         }
         if (selectedPhone.isNotBlank()) {
-            detailText?.text = "איש קשר נבחר\n$selectedPhone"
-            confirmButton?.text = "אשר והמשך"
+            detailText?.text = "Selected contact\n$selectedPhone"
+            confirmButton?.text = "Confirm and continue"
         } else {
-            Toast.makeText(this, "לא נמצא מספר לאיש הקשר", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "No phone number found for this contact", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -110,7 +110,7 @@ class ActionConfirmationActivity : Activity() {
                         val share = Intent(Intent.ACTION_SEND).setType("text/plain")
                             .putExtra(Intent.EXTRA_TEXT, body)
                         try { startActivity(share.setPackage("com.whatsapp")) }
-                        catch (_: Exception) { startActivity(Intent.createChooser(share, "שליחה בוואטסאפ")) }
+                        catch (_: Exception) { startActivity(Intent.createChooser(share, "Send with WhatsApp")) }
                     }
                 }
                 TYPE_EMAIL -> {
@@ -119,7 +119,7 @@ class ActionConfirmationActivity : Activity() {
                     startActivity(Intent(Intent.ACTION_SENDTO, uri))
                 }
                 TYPE_CALL -> {
-                    if (phone.isBlank()) throw IllegalArgumentException("לא זוהה מספר טלפון")
+                    if (phone.isBlank()) throw IllegalArgumentException("No phone number was detected")
                     startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(phone))))
                 }
                 TYPE_CALENDAR -> {
@@ -161,13 +161,13 @@ class ActionConfirmationActivity : Activity() {
                 }
                 TYPE_COMMENT -> {
                     val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("תגובה", body))
-                    Toast.makeText(this, "התגובה הועתקה. אפשר להדביק אותה בשדה התגובה.", Toast.LENGTH_LONG).show()
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Comment", body))
+                    Toast.makeText(this, "Comment copied. You can paste it into the comment field.", Toast.LENGTH_LONG).show()
                 }
-                else -> throw IllegalArgumentException("סוג פעולה לא מוכר")
+                else -> throw IllegalArgumentException("Unknown action type")
             }
         } catch (e: Exception) {
-            Toast.makeText(this, e.message ?: "לא ניתן לפתוח את הפעולה", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, e.message ?: "Could not open this action", Toast.LENGTH_LONG).show()
         } finally {
             finish()
         }
