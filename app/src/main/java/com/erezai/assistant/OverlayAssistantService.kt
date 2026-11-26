@@ -47,7 +47,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private val textReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             if (intent?.action == VoiceAssistantService.ACTION_WAKE_HEARD) {
-                speak("כן, אני שומע. מה תרצה שאעשה?")
+                speak("I’m listening. What would you like me to do?")
             } else if (intent?.action == VoiceAssistantService.ACTION_RECOGNIZED) {
                 intent.getStringExtra(VoiceAssistantService.EXTRA_COMMAND)?.let { runCommand(it) }
             } else if (intent?.action == VoiceAssistantService.ACTION_TRANSCRIPT) {
@@ -97,21 +97,19 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val languageResult = tts?.setLanguage(Locale("he", "IL")) ?: TextToSpeech.LANG_NOT_SUPPORTED
-            // Prefer an installed Hebrew male voice when the Android TTS engine exposes one.
-            val hebrewMale = tts?.voices?.firstOrNull { voice ->
-                voice.locale.language == "he" &&
+            val languageResult = tts?.setLanguage(Locale.US) ?: TextToSpeech.LANG_NOT_SUPPORTED
+            val englishVoice = tts?.voices?.firstOrNull { voice ->
+                voice.locale.language == "en" &&
                     (voice.name.contains("male", ignoreCase = true) || voice.name.contains("masculine", ignoreCase = true))
             }
-            if (hebrewMale != null) {
-                tts?.voice = hebrewMale
-                tts?.setPitch(1.0f)
+            if (englishVoice != null) tts?.voice = englishVoice
+            tts?.setPitch(1.0f)
+            latestVoiceStatus = if (englishVoice == null) {
+                "No dedicated English male voice is installed; using the available English voice."
             } else {
-                // Do not fake a male voice by lowering pitch; retain the natural system voice.
-                tts?.setPitch(1.0f)
-                latestVoiceStatus = "קול גברי עברי ייעודי לא זמין במנוע המותקן; משתמש בקול העברי הזמין."
-                statusText?.text = latestVoiceStatus
+                "English voice is ready."
             }
+            statusText?.text = latestVoiceStatus
             tts?.setSpeechRate(0.94f)
             ttsReady = languageResult >= TextToSpeech.LANG_AVAILABLE
             val queued = pendingSpeech
@@ -136,6 +134,15 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         statusText?.text = message
         if (tts == null || !ttsReady) {
             pendingSpeech = message
+            return
+        }
+        val containsHebrew = message.any { it.code in 0x0590..0x05FF }
+        val requestedLocale = if (containsHebrew) Locale("he", "IL") else Locale.US
+        val languageResult = tts?.setLanguage(requestedLocale) ?: TextToSpeech.LANG_NOT_SUPPORTED
+        if (languageResult < TextToSpeech.LANG_AVAILABLE) {
+            val fallback = if (containsHebrew) "Hebrew speech data is not installed on this device." else "English speech data is not installed on this device."
+            statusText?.text = fallback
+            voiceControl(VoiceAssistantService.ACTION_RESUME)
             return
         }
         voiceControl(VoiceAssistantService.ACTION_PAUSE)
