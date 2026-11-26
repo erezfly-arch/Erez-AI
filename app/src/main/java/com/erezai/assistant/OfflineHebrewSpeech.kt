@@ -11,11 +11,11 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Offline Hebrew speech recognition powered by Whisper Base multilingual + sherpa-onnx.
+ * Offline English speech recognition powered by Whisper Base multilingual + sherpa-onnx.
  * Model files are downloaded once to app-private storage; recognition never calls a cloud API.
  */
-class OfflineHebrewSpeech(private val context: Context) {
-    private val modelDir = File(context.filesDir, "whisper-he-base-int8")
+class OfflineEnglishSpeech(private val context: Context) {
+    private val modelDir = File(context.filesDir, "whisper-en-base-int8")
     private var recognizer: OfflineRecognizer? = null
     @Volatile private var activeConnection: HttpURLConnection? = null
 
@@ -35,7 +35,7 @@ class OfflineHebrewSpeech(private val context: Context) {
                 whisper = OfflineWhisperModelConfig(
                     encoder = encoder.absolutePath,
                     decoder = decoder.absolutePath,
-                    language = "he",
+                    language = "en",
                     task = "transcribe"
                 ),
                 tokens = tokens.absolutePath,
@@ -48,7 +48,7 @@ class OfflineHebrewSpeech(private val context: Context) {
     }
 
     fun transcribe(samples: FloatArray): String {
-        val active = recognizer ?: throw IllegalStateException("Offline Hebrew speech model is not initialized")
+        val active = recognizer ?: throw IllegalStateException("Offline English speech model is not initialized")
         if (samples.isEmpty()) return ""
         val stream = active.createStream()
         return try {
