@@ -32,16 +32,16 @@ class OfflineHebrewTts(private val context: Context) {
             !tokens.exists() || tokens.length() < 100L ||
             !espeakData.exists() || (espeakData.listFiles()?.isEmpty() != false)
         ) {
-            onStatus("מוריד קול עברי גברי מקומי בפעם הראשונה…")
+            onStatus("Downloading the offline Hebrew voice for the first time…")
             downloadAndExtract()
         }
         if (model.length() < 60_000_000L || tokens.length() < 100L ||
             !espeakData.exists() || (espeakData.listFiles()?.isEmpty() != false)
         ) {
-            throw IllegalStateException("קובצי הקול העברי לא הותקנו במלואם")
+            throw IllegalStateException("The Hebrew voice files were not installed completely.")
         }
 
-        onStatus("מפעיל מנוע דיבור עברי מקומי…")
+        onStatus("Starting the offline Hebrew speech engine…")
         val config = OfflineTtsConfig(
             model = OfflineTtsModelConfig(
                 vits = OfflineTtsVitsModelConfig(
@@ -55,12 +55,12 @@ class OfflineHebrewTts(private val context: Context) {
             )
         )
         engine = OfflineTts(config = config)
-        onStatus("הקול העברי הגברי המקומי מוכן.")
+        onStatus("The offline Hebrew voice is ready.")
     }
 
     @Synchronized
     fun speak(text: String) {
-        val active = engine ?: throw IllegalStateException("מנוע הדיבור העברי עדיין לא מוכן")
+        val active = engine ?: throw IllegalStateException("The offline Hebrew speech engine is not ready.")
         val generated = active.generate(text = text)
         play(generated.samples, generated.sampleRate)
     }
@@ -97,7 +97,7 @@ class OfflineHebrewTts(private val context: Context) {
             var offset = 0
             while (offset < pcm.size) {
                 val written = track.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
-                if (written <= 0) throw IllegalStateException("נכשלה השמעת הקול העברי")
+                if (written <= 0) throw IllegalStateException("Hebrew audio playback failed.")
                 offset += written
             }
             track.stop()
@@ -119,12 +119,12 @@ class OfflineHebrewTts(private val context: Context) {
         try {
             http.connect()
             val code = http.responseCode
-            if (code !in 200..299) throw IllegalStateException("הורדת הקול נכשלה: HTTP $code")
+            if (code !in 200..299) throw IllegalStateException("Hebrew voice download failed: HTTP $code")
             http.inputStream.use { input ->
                 archive.outputStream().buffered().use { output -> input.copyTo(output) }
             }
             if (archive.length() < 60_000_000L) {
-                throw IllegalStateException("קובץ הקול שהתקבל קטן מדי או חלקי")
+                throw IllegalStateException("The downloaded voice archive is too small or incomplete.")
             }
             ZipInputStream(archive.inputStream().buffered()).use { zip ->
                 var entry = zip.nextEntry
@@ -136,7 +136,7 @@ class OfflineHebrewTts(private val context: Context) {
                         val target = File(modelDir, relative)
                         val rootPath = modelDir.canonicalPath + File.separator
                         if (!target.canonicalPath.startsWith(rootPath)) {
-                            throw IllegalStateException("נתיב לא בטוח בתוך ארכיון הקול")
+                            throw IllegalStateException("Unsafe path in the voice archive.")
                         }
                         if (entry.isDirectory) {
                             target.mkdirs()
@@ -155,7 +155,7 @@ class OfflineHebrewTts(private val context: Context) {
             if (model.length() < 60_000_000L || tokens.length() < 100L ||
                 !espeakData.exists() || (espeakData.listFiles()?.isEmpty() != false)
             ) {
-                throw IllegalStateException("ארכיון הקול לא הכיל את כל הקבצים הנדרשים")
+                throw IllegalStateException("The voice archive did not contain all required files.")
             }
         } finally {
             http.disconnect()
