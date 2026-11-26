@@ -71,7 +71,7 @@ class VoiceIdentity(private val context: Context) {
     }
 
     private fun computeEmbedding(active: SpeakerEmbeddingExtractor, samples: FloatArray): FloatArray {
-        if (samples.size < SAMPLE_RATE * 2) {
+        if (samples.size < SAMPLE_RATE) {
             throw IllegalArgumentException("At least one second of clear speech is required.")
         }
         val stream: OnlineStream = active.createStream()
