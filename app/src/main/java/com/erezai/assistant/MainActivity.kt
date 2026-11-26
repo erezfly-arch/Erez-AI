@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var pendingVoiceStart = false
     private var voiceStartupRequested = false
     private var screenConsentRequested = false
+    private var voiceEnrollmentLaunched = false
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -107,6 +108,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
     override fun onResume() {
         super.onResume()
+        if (voiceEnrollmentLaunched) {
+            voiceEnrollmentLaunched = false
+            if (VoiceIdentity.hasEnrollment(this)) startVoiceService()
+            else say("Voice profile setup was not completed. Use the voice-profile button to try again.")
+        }
         if (pendingVoiceStart && android.provider.Settings.canDrawOverlays(this)) {
             pendingVoiceStart = false
             startVoiceService()
@@ -182,6 +188,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             setPadding(0, 12, 0, 12)
         })
         root.addView(button("Send command") { handle(command.text.toString()) })
+        root.addView(button("Set up / retrain voice profile") { startVoiceEnrollment() })
         modelRetryButton = button("Retry AI engine") { prepareBrain() }.apply { visibility = android.view.View.GONE }
         root.addView(modelRetryButton)
         root.addView(TextView(this).apply {
@@ -251,7 +258,21 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         screenConsent.launch(mgr.createScreenCaptureIntent())
     }
 
+    private fun startVoiceEnrollment() {
+        if (voiceEnrollmentLaunched) return
+        if (voiceStartupRequested) {
+            startService(Intent(this, VoiceAssistantService::class.java).setAction(VoiceAssistantService.ACTION_STOP))
+            voiceStartupRequested = false
+        }
+        voiceEnrollmentLaunched = true
+        startActivity(Intent(this, VoiceEnrollmentActivity::class.java))
+    }
+
     private fun startVoiceService() {
+        if (!VoiceIdentity.hasEnrollment(this)) {
+            startVoiceEnrollment()
+            return
+        }
         if (voiceStartupRequested) return
         if (!android.provider.Settings.canDrawOverlays(this)) {
             pendingVoiceStart = true
