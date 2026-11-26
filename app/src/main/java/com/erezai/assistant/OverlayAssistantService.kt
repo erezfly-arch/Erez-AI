@@ -61,7 +61,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 }
             } else if (intent?.action == VoiceAssistantService.ACTION_STATUS) {
                 latestVoiceStatus = intent.getStringExtra(VoiceAssistantService.EXTRA_STATUS).orEmpty()
-                voiceListening = latestVoiceStatus.contains("Listening", ignoreCase = true) || latestVoiceStatus.contains("speech model", ignoreCase = true) || latestVoiceStatus.contains("Preparing", ignoreCase = true)
+                voiceListening = latestVoiceStatus.contains("Listening", ignoreCase = true) || latestVoiceStatus.contains("standby", ignoreCase = true) || latestVoiceStatus.contains("speech model", ignoreCase = true) || latestVoiceStatus.contains("Preparing", ignoreCase = true)
                 statusText?.text = latestVoiceStatus
                 voiceButton?.text = if (voiceListening) "⏹ Stop listening" else "🎙️ Voice standby"
             } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_STOPPED) {
