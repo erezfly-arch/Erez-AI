@@ -397,11 +397,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     speak("קיבלתי. אני חושב על זה…")
                     ErezAiBrain.ask(
                         t,
-                        { chunk -> answer.append(chunk) },
+                        { chunk ->
+                            answer.append(chunk)
+                            val partial = answer.toString()
+                            runOnUiThread { say(partial) }
+                        },
                         {
                             runOnUiThread {
                                 val reply = answer.toString().trim()
-                                speak(reply.ifBlank { "לא הצלחתי להפיק תשובה. נסה שוב." })
+                                speak(reply.ifBlank { "המודל סיים בלי להחזיר תשובה. אפשר לנסות שוב." })
                             }
                         },
                         { error -> runOnUiThread { speak("נתקלתי בבעיה ביצירת התשובה: $error") } }
