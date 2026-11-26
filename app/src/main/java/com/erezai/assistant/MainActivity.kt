@@ -86,8 +86,20 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         } else {
             requestMicrophonePermission()
         }
+        if (intent?.getBooleanExtra(EXTRA_REQUEST_SCREEN_CAPTURE, false) == true) {
+            intent.removeExtra(EXTRA_REQUEST_SCREEN_CAPTURE)
+            window.decorView.post { requestScreenCaptureConsent() }
+        }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_REQUEST_SCREEN_CAPTURE, false)) {
+            intent.removeExtra(EXTRA_REQUEST_SCREEN_CAPTURE)
+            requestScreenCaptureConsent()
+        }
+    }
     override fun onResume() {
         super.onResume()
         if (pendingVoiceStart && android.provider.Settings.canDrawOverlays(this)) {
