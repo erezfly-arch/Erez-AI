@@ -338,8 +338,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if (t.isEmpty()) return
         say("You: $t")
         when {
-            t.contains("what do you see") || t.contains("describe the screen") -> {
-                if (!ErezAiBrain.isReady()) {
+            t.contains("what do you see") || t.contains("describe the screen") || t.contains("read the screen") || t.contains("read this") -> {
+                if (latestScreenText.isBlank() && latestScreenImagePath.isBlank()) {
+                    requestScreenCaptureConsent()
+                } else if (!ErezAiBrain.isReady()) {
                     speak("The local AI engine is not ready yet. Complete the initial download.")
                 } else {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
@@ -369,16 +371,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             t.contains("WhatsApp", ignoreCase = true) -> {
                 speak("WhatsApp voice-note replies are not connected yet. I will not send a typed message instead.")
             }
-            false -> {
-                val messageStart = if (t.contains("WhatsApp")) t.substringAfter("WhatsApp") else {
-                    val marker = t.indexOf("whatsapp", ignoreCase = true)
-                    if (marker >= 0) t.substring(marker + "whatsapp".length) else t
-                }
-                val msg = messageStart.trim().replaceFirst(Regex("^ל[^\\s,:]+:?\\s*"), "")
-                val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
-                confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "WhatsApp message", msg, phone = phone)
-            }
-            t.contains("email") || t.contains("איemail") -> {
+            t.contains("email", ignoreCase = true) -> {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(t)?.value.orEmpty()
                 val subject = t.substringAfter("subject", "Message from Erez AI").substringBefore("body").trim().ifBlank { "Message from Erez AI" }
                 if (ErezAiBrain.isReady()) {
