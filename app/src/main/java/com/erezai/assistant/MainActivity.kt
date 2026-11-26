@@ -24,6 +24,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     companion object {
         const val EXTRA_REQUEST_SCREEN_CAPTURE = "request_screen_capture"
+        const val EXTRA_SCREEN_CAPTURE_ONE_SHOT = "screen_capture_one_shot"
     }
 
     private lateinit var log: TextView
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var pendingVoiceStart = false
     private var voiceStartupRequested = false
     private var screenConsentRequested = false
+    private var screenCaptureOneShot = true
     private var voiceEnrollmentLaunched = false
 
     private val screenReceiver = object : BroadcastReceiver() {
@@ -44,6 +46,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 latestScreenText = ""
                 latestScreenImagePath = ""
                 latestScreenFramePaths = emptyList()
+                screenConsentRequested = false
                 say("Screen sharing stopped.")
             } else {
                 latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
@@ -57,7 +60,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private val screenConsent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             val i = Intent(this, ScreenCaptureService::class.java)
-                .putExtra("resultCode", result.resultCode).putExtra("data", result.data)
+                .putExtra("resultCode", result.resultCode)
+                .putExtra("data", result.data)
+                .putExtra(ScreenCaptureService.EXTRA_ONE_SHOT, screenCaptureOneShot)
             ContextCompat.startForegroundService(this, i)
             say("Screen sharing is active. I can analyze visible images and text while you use other apps. The notification shows when sharing is active.")
             startVoiceService()
@@ -93,6 +98,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             requestMicrophonePermission()
         }
         if (intent?.getBooleanExtra(EXTRA_REQUEST_SCREEN_CAPTURE, false) == true) {
+            screenCaptureOneShot = intent.getBooleanExtra(EXTRA_SCREEN_CAPTURE_ONE_SHOT, true)
             intent.removeExtra(EXTRA_REQUEST_SCREEN_CAPTURE)
             window.decorView.post { requestScreenCaptureConsent() }
         }
@@ -102,6 +108,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra(EXTRA_REQUEST_SCREEN_CAPTURE, false)) {
+            screenCaptureOneShot = intent.getBooleanExtra(EXTRA_SCREEN_CAPTURE_ONE_SHOT, true)
             intent.removeExtra(EXTRA_REQUEST_SCREEN_CAPTURE)
             requestScreenCaptureConsent()
         }
