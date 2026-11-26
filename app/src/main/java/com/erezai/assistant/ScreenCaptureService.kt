@@ -162,7 +162,7 @@ class ScreenCaptureService : Service() {
                     }.take(5000)
 
                     val frameDir = File(cacheDir, "erez-recent-frames").apply { mkdirs() }
-                    val screenFile = File(frameDir, "latest-screen.jpg")
+                    val screenFile = File(frameDir, "frame_" + System.currentTimeMillis() + ".jpg")
                     val imageSaved = try {
                         screenFile.outputStream().buffered().use { output ->
                             bitmap.compress(Bitmap.CompressFormat.JPEG, 70, output)
@@ -174,8 +174,8 @@ class ScreenCaptureService : Service() {
                     val framePaths = ArrayList<String>()
                     if (imageSaved) {
                         synchronized(recentFrames) {
-                            recentFrames.clear()
                             recentFrames.addLast(screenFile)
+                            while (recentFrames.size > 2) recentFrames.removeFirst().delete()
                             framePaths.add(screenFile.absolutePath)
                         }
                     }
