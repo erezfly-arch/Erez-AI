@@ -65,14 +65,14 @@ class VoiceIdentity(private val context: Context) {
     fun verify(samples: FloatArray): Boolean {
         val active = extractor ?: return false
         val activeManager = manager ?: return false
-        if (!activeManager.contains(OWNER) || samples.size < SAMPLE_RATE * 2) return false
+        if (!activeManager.contains(OWNER) || samples.size < SAMPLE_RATE) return false
         val embedding = computeEmbedding(active, samples)
         return activeManager.verify(OWNER, embedding, SIMILARITY_THRESHOLD)
     }
 
     private fun computeEmbedding(active: SpeakerEmbeddingExtractor, samples: FloatArray): FloatArray {
         if (samples.size < SAMPLE_RATE * 2) {
-            throw IllegalArgumentException("At least two seconds of clear speech are required.")
+            throw IllegalArgumentException("At least one second of clear speech is required.")
         }
         val stream: OnlineStream = active.createStream()
         return try {
