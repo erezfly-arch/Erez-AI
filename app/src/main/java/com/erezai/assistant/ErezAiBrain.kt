@@ -158,7 +158,7 @@ object ErezAiBrain {
                         Contents.of(prompt)
                     }
                     target.sendMessageAsync(messages).collect { message ->
-                        onChunk(message.text)
+                        onChunk(message.toString())
                     }
                 }
                 onDone()
@@ -218,7 +218,7 @@ object ErezAiBrain {
                                     Content.Text("תאר את הפריים הזה בצורה מדויקת ותמציתית.")
                                 )
                             ).collect { message ->
-                                caption.append(message.text)
+                                caption.append(message.toString())
                             }
                         }
                         observations.append("פריים ").append(index + 1).append(": ")
