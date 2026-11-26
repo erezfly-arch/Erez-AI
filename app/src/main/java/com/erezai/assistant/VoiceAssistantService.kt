@@ -25,7 +25,7 @@ import kotlin.concurrent.thread
 import kotlin.math.sqrt
 
 /**
- * Visible foreground microphone session with fully offline Hebrew Whisper ASR.
+ * Visible foreground microphone session with fully offline English Whisper ASR.
  * The mic is user-started and can be paused by the assistant while TTS is speaking.
  */
 class VoiceAssistantService : Service() {
@@ -50,7 +50,7 @@ class VoiceAssistantService : Service() {
     @Volatile private var wakeArmedUntil = 0L
     private var captureThread: Thread? = null
     private var recorder: AudioRecord? = null
-    private var offlineSpeech: OfflineHebrewSpeech? = null
+    private var offlineSpeech: OfflineEnglishSpeech? = null
 
     private val controlReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -74,15 +74,15 @@ class VoiceAssistantService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             running = false
-            sendBroadcast(Intent(ACTION_STATUS).setPackage(packageName).putExtra(EXTRA_STATUS, "ההאזנה נעצרה."))
+            sendBroadcast(Intent(ACTION_STATUS).setPackage(packageName).putExtra(EXTRA_STATUS, "Listening stopped."))
             offlineSpeech?.cancel()
             stopSelf()
             return START_NOT_STICKY
         }
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("מכין זיהוי דיבור מקומי…"))
+        startForeground(NOTIFICATION_ID, buildNotification("Preparing offline speech recognition…"))
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            updateNotification("אין הרשאת מיקרופון. ההאזנה נעצרה.")
+            updateNotification("אין הרשאת מיקרופון. Listening stopped.")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -96,7 +96,7 @@ class VoiceAssistantService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "האזנה קולית של ארז AI", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, "Erez AI voice listening", NotificationManager.IMPORTANCE_LOW)
             )
         }
     }
@@ -124,17 +124,17 @@ class VoiceAssistantService : Service() {
     }
 
     private fun runOfflineListening() {
-        val asr = OfflineHebrewSpeech(applicationContext)
+        val asr = OfflineEnglishSpeech(applicationContext)
         offlineSpeech = asr
         try {
-            updateNotification("מוריד מודל עברית מקומי בפעם הראשונה…")
+            updateNotification("Downloading the English speech model for the first time…")
             asr.initialize { message -> updateNotification(message) }
-            updateNotification("מקשיב בעברית · העיבוד מתבצע במכשיר בלבד")
+            updateNotification("Listening in English · processed on this device")
 
             val minBytes = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
             )
-            if (minBytes <= 0) throw IllegalStateException("המכשיר לא מספק buffer למיקרופון")
+            if (minBytes <= 0) throw IllegalStateException("The device did not provide a microphone buffer")
             val audio = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 SAMPLE_RATE,
@@ -144,7 +144,7 @@ class VoiceAssistantService : Service() {
             )
             if (audio.state != AudioRecord.STATE_INITIALIZED) {
                 audio.release()
-                throw IllegalStateException("לא ניתן לאתחל את המיקרופון")
+                throw IllegalStateException("Could not initialize the microphone")
             }
             recorder = audio
             audio.startRecording()
@@ -207,7 +207,7 @@ class VoiceAssistantService : Service() {
                                 .replace(Regex("[^\\p{L}\\p{N}\\s]+"), " ")
                                 .replace(Regex("\\s+"), " ")
                                 .trim()
-                            val wakePhrases = listOf("היי ארז שומע", "ארז שומע")
+                            val wakePhrases = listOf("hey erez", "hey eric", "hey aris")
                             val wakePrefix = wakePhrases.firstOrNull { lower == it || lower.startsWith("$it ") }.orEmpty()
                             if (wakePrefix.isNotEmpty()) {
                                 val command = lower.removePrefix(wakePrefix).trim()
@@ -230,7 +230,7 @@ class VoiceAssistantService : Service() {
             }
         } catch (e: Exception) {
             Log.e("ErezAI", "Offline voice session failed", e)
-            if (running) updateNotification("שגיאה בהאזנה מקומית: ${e.message ?: "לא ידועה"}")
+            if (running) updateNotification("Offline listening error: ${e.message ?: "לא ידועה"}")
             running = false
         } finally {
             try { recorder?.stop() } catch (_: Exception) {}
@@ -244,7 +244,7 @@ class VoiceAssistantService : Service() {
 
     override fun onDestroy() {
         running = false
-        sendBroadcast(Intent(ACTION_STATUS).setPackage(packageName).putExtra(EXTRA_STATUS, "ההאזנה נעצרה."))
+        sendBroadcast(Intent(ACTION_STATUS).setPackage(packageName).putExtra(EXTRA_STATUS, "Listening stopped."))
         offlineSpeech?.cancel()
         try { unregisterReceiver(controlReceiver) } catch (_: Exception) {}
         try { recorder?.stop() } catch (_: Exception) {}
