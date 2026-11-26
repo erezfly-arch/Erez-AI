@@ -24,6 +24,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private lateinit var log: TextView
     private lateinit var command: EditText
+    private lateinit var modelRetryButton: Button
     private var latestScreenText = ""
     private var latestScreenImagePath = ""
     private var latestScreenFramePaths: List<String> = emptyList()
@@ -79,7 +80,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         // the minimum permissions in sequence instead of asking the user to find
         // separate download/start buttons.
         say("מתחיל להכין את ארז AI. הורדת המודל המקומי עשויה להיות גדולה ודורשת חיבור Wi-Fi ואחסון פנוי.")
-        ErezAiBrain.prepare(this) { message -> runOnUiThread { say(message) } }
+        prepareBrain()
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
@@ -164,6 +165,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             setPadding(0, 12, 0, 12)
         })
         root.addView(button("שלח הוראה") { handle(command.text.toString()) })
+        modelRetryButton = button("נסה לטעון את מוח הבינה שוב") { prepareBrain() }.apply { visibility = android.view.View.GONE }
+        root.addView(modelRetryButton)
         root.addView(TextView(this).apply {
             text = "השיחה, ההאזנה והצפייה במסך מופעלות אוטומטית לאחר אישורי Android. אפשר לעצור דרך ההתראה של ארז AI."
             setTextColor(0xFFB7C4D8.toInt())
@@ -172,6 +175,30 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         })
         root.addView(ScrollView(this).apply { addView(log) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+    }
+
+    private fun prepareBrain() {
+        if (ErezAiBrain.isReady()) {
+            say("מוח הבינה כבר מוכן.")
+            return
+        }
+        if (::modelRetryButton.isInitialized) {
+            modelRetryButton.isEnabled = false
+            modelRetryButton.text = "טוען את מוח הבינה…"
+            modelRetryButton.visibility = android.view.View.VISIBLE
+        }
+        ErezAiBrain.prepare(this) { message ->
+            runOnUiThread {
+                say(message)
+                val failed = message.startsWith("טעינת מוח הבינה נכשלה")
+                val ready = message.contains("מוח הבינה המקומי מוכן")
+                if (::modelRetryButton.isInitialized) {
+                    modelRetryButton.visibility = if (failed) android.view.View.VISIBLE else android.view.View.GONE
+                    modelRetryButton.isEnabled = failed
+                    modelRetryButton.text = if (failed) "הטעינה נכשלה — נסה שוב" else if (ready) "מוח הבינה מוכן" else "טוען את מוח הבינה…"
+                }
+            }
+        }
     }
 
     private fun requestMicrophonePermission() {
@@ -370,7 +397,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     ErezAiBrain.ask(t, { chunk -> runOnUiThread { log.append(chunk) } },
                         { runOnUiThread { log.append("\\n") } },
                         { error -> runOnUiThread { speak(error) } })
-                } else speak("מנוע הבינה עדיין לא מוכן. לחץ קודם על הורד והפעל מוח AI מקומי.")
+                } else speak("מוח הבינה עדיין נטען או שהטעינה נכשלה. בדוק את הודעת השגיאה במסך ולחץ על ״נסה שוב״.")
             }
         }
     }
