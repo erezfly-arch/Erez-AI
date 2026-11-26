@@ -354,19 +354,22 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
             }
             t.contains("comment") || t.contains("reply") -> {
-                if (!ErezAiBrain.isReady()) speak("כדי לנסח comment, צריך לטעון קודם את מוח הבינה המקומי.")
+                if (!ErezAiBrain.isReady()) speak("The local AI brain is not ready yet.")
                 else {
                     val draft = StringBuilder()
                     ErezAiBrain.ask(
-                        "נסח comment בעברית טבעית וקצרה שמתאימה לפוסט או לסרטון שמופיעים במסך. החזר רק את נוסח הcomment. בקשת המשתמש: " +
+                         "Write a concise, natural English comment for the visible post or video. Return only the comment draft. User request: " +
                             t + "\\nScreen content:\\n" + latestScreenText.take(5000),
                         { part -> draft.append(part) },
-                        { runOnUiThread { confirmAction(ActionConfirmationActivity.TYPE_COMMENT, "טיוטת comment להעתקה", draft.toString()) } },
+                        { runOnUiThread { confirmAction(ActionConfirmationActivity.TYPE_COMMENT, "Comment draft", draft.toString()) } },
                         { error -> runOnUiThread { speak(error) } }
                     )
                 }
             }
-            t.contains("WhatsApp") || t.contains("whatsapp", ignoreCase = true) -> {
+            t.contains("WhatsApp", ignoreCase = true) -> {
+                speak("WhatsApp voice-note replies are not connected yet. I will not send a typed message instead.")
+            }
+            false -> {
                 val messageStart = if (t.contains("WhatsApp")) t.substringAfter("WhatsApp") else {
                     val marker = t.indexOf("whatsapp", ignoreCase = true)
                     if (marker >= 0) t.substring(marker + "whatsapp".length) else t
@@ -377,7 +380,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
             t.contains("email") || t.contains("איemail") -> {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(t)?.value.orEmpty()
-                val subject = t.substringAfter("subject", "הודעה מErez AI").substringBefore("body").trim().ifBlank { "הודעה מErez AI" }
+                val subject = t.substringAfter("subject", "Message from Erez AI").substringBefore("body").trim().ifBlank { "Message from Erez AI" }
                 if (ErezAiBrain.isReady()) {
                     val draft = StringBuilder()
                     ErezAiBrain.ask(
@@ -387,7 +390,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         { error -> runOnUiThread { speak(error) } }
                     )
                 } else {
-                    val body = t.substringAfter("body", t.substringAfter("כתוב", t)).trim()
+                    val body = t.substringAfter("body", t).trim()
                     confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, body, recipient = recipient)
                 }
             }
@@ -402,10 +405,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
             t.contains("reminder") || t.contains("calendar") -> {
                 val title = t.substringAfter("reminder", t.substringAfter("calendar", t)).trim()
-                confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "reminder חדשה" }, "")
+                confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "New reminder" }, "")
             }
             t.contains("search") || t.contains("Google") || t.contains("web") -> {
-                searchWeb(t.removePrefix("search").removePrefix(" לי").removeSuffix("בweb").trim())
+                searchWeb(t.removePrefix("search").removePrefix(" the web").removeSuffix(" on the web").trim())
             }
             else -> {
                 if (ErezAiBrain.isReady()) {
