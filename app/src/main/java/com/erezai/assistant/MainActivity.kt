@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             startVoiceService()
         } else {
             screenConsentRequested = false
+            sendBroadcast(Intent(ScreenCaptureService.ACTION_SCREEN_CAPTURE_FAILED).setPackage(packageName))
             say("Screen sharing was not approved. Voice standby can continue, but I cannot see your screen.")
             startVoiceService()
         }
