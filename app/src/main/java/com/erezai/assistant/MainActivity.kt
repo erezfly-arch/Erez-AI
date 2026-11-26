@@ -57,7 +57,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             say("Screen sharing is active. I can analyze visible images and text while you use other apps. The notification shows when sharing is active.")
             startVoiceService()
         } else {
-            say("Screen sharing was not approved. Voice chat can continue, but I cannot see your screen.")
+            screenConsentRequested = false
+            say("Screen sharing was not approved. Voice standby can continue, but I cannot see your screen.")
             startVoiceService()
         }
     }
