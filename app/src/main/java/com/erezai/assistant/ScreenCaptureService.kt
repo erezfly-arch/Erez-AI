@@ -39,6 +39,7 @@ class ScreenCaptureService : Service() {
         const val EXTRA_ONE_SHOT = "screen_capture_one_shot"
         const val ACTION_SCREEN_STOPPED = "com.erezai.assistant.SCREEN_STOPPED"
         const val ACTION_SCREEN_CAPTURE_DONE = "com.erezai.assistant.SCREEN_CAPTURE_DONE"
+        const val ACTION_SCREEN_CAPTURE_FAILED = "com.erezai.assistant.SCREEN_CAPTURE_FAILED"
         private const val FRAME_INTERVAL_MS = 4000L
     }
 
