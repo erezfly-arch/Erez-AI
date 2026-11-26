@@ -15,7 +15,7 @@ import java.net.URL
  * Model files are downloaded once to app-private storage; recognition never calls a cloud API.
  */
 class OfflineEnglishSpeech(private val context: Context) {
-    private val modelDir = File(context.filesDir, "whisper-en-base-int8")
+    private val modelDir = File(context.filesDir, "whisper-he-base-int8")
     private var recognizer: OfflineRecognizer? = null
     @Volatile private var activeConnection: HttpURLConnection? = null
 
