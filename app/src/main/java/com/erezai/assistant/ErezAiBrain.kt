@@ -256,7 +256,8 @@ object ErezAiBrain {
                 modelPath = model.absolutePath,
                 backend = backend,
                 visionBackend = visionBackend,
-                audioBackend = Backend.CPU(),
+                // This Qwen2-VL bundle has no audio tower. Do not request an audio backend;
+                // doing so can make native conversation creation fail for vision-only models.
                 maxNumTokens = 2048,
                 maxNumImages = 1,
                 cacheDir = context.cacheDir.absolutePath
