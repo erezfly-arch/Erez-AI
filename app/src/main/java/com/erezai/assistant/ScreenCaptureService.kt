@@ -38,6 +38,7 @@ class ScreenCaptureService : Service() {
         const val ACTION_STOP = "com.erezai.assistant.screen.STOP"
         const val EXTRA_ONE_SHOT = "screen_capture_one_shot"
         const val ACTION_SCREEN_STOPPED = "com.erezai.assistant.SCREEN_STOPPED"
+        const val ACTION_SCREEN_CAPTURE_DONE = "com.erezai.assistant.SCREEN_CAPTURE_DONE"
         private const val FRAME_INTERVAL_MS = 4000L
     }
 
@@ -216,7 +217,7 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onDestroy() {
-        if (!oneShotCompleted) sendBroadcast(Intent(ACTION_SCREEN_STOPPED).setPackage(packageName))
+        sendBroadcast(Intent(if (oneShotCompleted) ACTION_SCREEN_CAPTURE_DONE else ACTION_SCREEN_STOPPED).setPackage(packageName))
         display?.release()
         reader?.setOnImageAvailableListener(null, null)
         reader?.close()
