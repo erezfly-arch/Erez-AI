@@ -35,14 +35,13 @@ class ScreenCaptureService : Service() {
         const val EXTRA_SCREEN_FRAME_PATHS = "screen_frame_paths"
         const val ACTION_STOP = "com.erezai.assistant.screen.STOP"
         const val ACTION_SCREEN_STOPPED = "com.erezai.assistant.SCREEN_STOPPED"
-        private const val FRAME_INTERVAL_MS = 1200L
+        private const val FRAME_INTERVAL_MS = 3000L
     }
 
     private var projection: MediaProjection? = null
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
-    private val labeler by lazy { ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS) }
     private val processing = AtomicBoolean(false)
     private val recentFrames = ArrayDeque<File>()
     // Tesseract is not thread-safe. Initialization and every OCR call share this worker.
@@ -51,7 +50,6 @@ class ScreenCaptureService : Service() {
     @Volatile private var hebrewOcrReady = false
     @Volatile private var lastText = ""
     @Volatile private var lastHebrewText = ""
-    @Volatile private var lastLabels = ""
     @Volatile private var lastFrameAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -87,7 +85,7 @@ class ScreenCaptureService : Service() {
                 override fun onStop() { stopSelf() }
             }, android.os.Handler(mainLooper))
             val metrics = resources.displayMetrics
-            reader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 3)
+            reader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
             reader?.setOnImageAvailableListener({ source -> processLatestFrame(source) }, null)
             display = projection?.createVirtualDisplay(
                 "ErezAI-screen", metrics.widthPixels, metrics.heightPixels, metrics.densityDpi,
@@ -113,7 +111,20 @@ class ScreenCaptureService : Service() {
             padded.copyPixelsFromBuffer(plane.buffer)
             val cropped = Bitmap.createBitmap(padded, 0, 0, frame.width, frame.height)
             padded.recycle()
-            cropped
+            // OCR and image inference do not need the phone's full native resolution.
+            // Downscale immediately to cap transient bitmap memory and processing cost.
+            val maxDimension = 960
+            val scale = minOf(1f, maxDimension.toFloat() / maxOf(cropped.width, cropped.height))
+            if (scale < 1f) {
+                val scaled = Bitmap.createScaledBitmap(
+                    cropped,
+                    (cropped.width * scale).toInt().coerceAtLeast(1),
+                    (cropped.height * scale).toInt().coerceAtLeast(1),
+                    true
+                )
+                cropped.recycle()
+                scaled
+            } else cropped
         } catch (e: Exception) {
             Log.w("ErezAI", "Could not convert captured frame", e)
             frame.close()
@@ -121,56 +132,40 @@ class ScreenCaptureService : Service() {
             return
         }
         frame.close()
-        val input = InputImage.fromBitmap(bitmap, 0)
-        val textTask = recognizer.process(input)
-        val labelsTask = labeler.process(input)
+
+        val textTask = try {
+            recognizer.process(InputImage.fromBitmap(bitmap, 0))
+        } catch (e: Exception) {
+            Log.w("ErezAI", "Could not start OCR", e)
+            bitmap.recycle()
+            processing.set(false)
+            return
+        }
         textTask.addOnSuccessListener { result ->
             lastText = result.text.trim()
         }.addOnFailureListener {
             lastText = ""
-            Log.w("ErezAI", "Latin OCR frame failed", it)
-        }
-        labelsTask.addOnSuccessListener { labels ->
-            val summary = labels.filter { it.confidence >= 0.55f }.take(8)
-                .joinToString(", ") { "${it.text} (${(it.confidence * 100).toInt()}%)" }
-            lastLabels = summary
-        }.addOnFailureListener {
-            lastLabels = ""
-            Log.w("ErezAI", "Image labeling failed", it)
+            Log.w("ErezAI", "OCR frame failed", it)
         }
 
-        Tasks.whenAllComplete(textTask, labelsTask).addOnCompleteListener {
-            // Hebrew OCR is performed off the UI/capture callback thread and is serialized.
+        textTask.addOnCompleteListener {
             ocrWorker.execute {
                 try {
-                    if (!hebrewOcrReady) {
-                        hebrewOcrReady = hebrewOcr.initialize()
-                    }
-                    if (hebrewOcrReady) {
-                        lastHebrewText = hebrewOcr.recognize(bitmap)
-                    } else {
-                        lastHebrewText = ""
-                    }
-                } catch (e: Exception) {
-                    lastHebrewText = ""
-                    Log.w("ErezAI", "Hebrew OCR initialization/recognition failed", e)
-                } finally {
+                    if (!hebrewOcrReady) hebrewOcrReady = hebrewOcr.initialize()
+                    lastHebrewText = if (hebrewOcrReady) hebrewOcr.recognize(bitmap) else ""
                     val combined = buildString {
-                        if (lastText.isNotBlank()) append("טקסט באנגלית שזוהה במסך:\n").append(lastText)
+                        if (lastText.isNotBlank()) append("טקסט שזוהה במסך:\n").append(lastText)
                         if (lastHebrewText.isNotBlank()) {
                             if (isNotEmpty()) append("\n\n")
                             append("טקסט בעברית שזוהה במסך:\n").append(lastHebrewText)
                         }
-                        if (lastLabels.isNotBlank()) {
-                            if (isNotEmpty()) append("\n\n")
-                            append("קטגוריות חזותיות כלליות שזוהו (לא תיאור סמנטי מלא):\n").append(lastLabels)
-                        }
-                    }.take(9000)
+                    }.take(5000)
+
                     val frameDir = File(cacheDir, "erez-recent-frames").apply { mkdirs() }
-                    val screenFile = File(frameDir, "frame_" + System.currentTimeMillis() + ".jpg")
+                    val screenFile = File(frameDir, "latest-screen.jpg")
                     val imageSaved = try {
                         screenFile.outputStream().buffered().use { output ->
-                            bitmap.compress(Bitmap.CompressFormat.JPEG, 82, output)
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 70, output)
                         }
                     } catch (e: Exception) {
                         Log.w("ErezAI", "Could not persist latest screen frame", e)
@@ -179,9 +174,9 @@ class ScreenCaptureService : Service() {
                     val framePaths = ArrayList<String>()
                     if (imageSaved) {
                         synchronized(recentFrames) {
+                            recentFrames.clear()
                             recentFrames.addLast(screenFile)
-                            while (recentFrames.size > 6) recentFrames.removeFirst().delete()
-                            recentFrames.forEach { framePaths.add(it.absolutePath) }
+                            framePaths.add(screenFile.absolutePath)
                         }
                     }
                     if (combined.isNotBlank() || imageSaved) {
@@ -190,6 +185,9 @@ class ScreenCaptureService : Service() {
                             .putExtra(EXTRA_SCREEN_IMAGE_PATH, if (imageSaved) screenFile.absolutePath else "")
                             .putStringArrayListExtra(EXTRA_SCREEN_FRAME_PATHS, framePaths))
                     }
+                } catch (e: Exception) {
+                    Log.w("ErezAI", "Screen OCR failed", e)
+                } finally {
                     bitmap.recycle()
                     processing.set(false)
                 }
@@ -204,7 +202,6 @@ class ScreenCaptureService : Service() {
         reader?.close()
         projection?.stop()
         recognizer.close()
-        labeler.close()
         try {
             ocrWorker.execute { try { hebrewOcr.close() } catch (_: Exception) {} }
             ocrWorker.shutdown()
