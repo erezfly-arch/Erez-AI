@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onResume()
         if (pendingVoiceStart && android.provider.Settings.canDrawOverlays(this)) {
             pendingVoiceStart = false
-            requestScreenCaptureConsent()
+            startVoiceService()
         }
     }
 
@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             hint = "Tell me what to do…"; textSize = 17f; setTextColor(-1); setHintTextColor(0xFF9AA8BA.toInt())
         }
         log = TextView(this).apply {
-            text = "שלום. Erez AI ממתין לטעינת המודל המקומי.\n"
+            text = "Erez AI is preparing its local brain and wake-word standby.\n"
             setTextColor(-1)
             textSize = 16f
             setPadding(0, 20, 0, 20)
@@ -168,7 +168,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         modelRetryButton = button("Retry AI engine") { prepareBrain() }.apply { visibility = android.view.View.GONE }
         root.addView(modelRetryButton)
         root.addView(TextView(this).apply {
-            text = "השיחה, ההאזנה והצפייה במסך מופעלות אוטומטית לאחר אישורי Android. אפשר לעצור דרך ההתראה של Erez AI."
+            text = "Wake-word standby stays on after setup. Screen capture is not continuous; Android permission is required when visual analysis is requested. Stop listening from the Erez AI notification."
             setTextColor(0xFFB7C4D8.toInt())
             textSize = 13f
             setPadding(0, 10, 0, 10)
@@ -220,7 +220,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
-        requestScreenCaptureConsent()
+        // Start in wake-word standby. Do not capture the screen continuously:
+        // Android screen projection is requested only when the user explicitly asks
+        // for visual screen analysis, reducing memory, battery, and privacy exposure.
+        startVoiceService()
     }
 
     private fun requestScreenCaptureConsent() {
