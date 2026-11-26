@@ -35,7 +35,7 @@ class ScreenCaptureService : Service() {
         const val EXTRA_SCREEN_FRAME_PATHS = "screen_frame_paths"
         const val ACTION_STOP = "com.erezai.assistant.screen.STOP"
         const val ACTION_SCREEN_STOPPED = "com.erezai.assistant.SCREEN_STOPPED"
-        private const val FRAME_INTERVAL_MS = 3000L
+        private const val FRAME_INTERVAL_MS = 4000L
     }
 
     private var projection: MediaProjection? = null
@@ -85,10 +85,15 @@ class ScreenCaptureService : Service() {
                 override fun onStop() { stopSelf() }
             }, android.os.Handler(mainLooper))
             val metrics = resources.displayMetrics
-            reader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
+            // Capture at a bounded resolution instead of mirroring every physical pixel.
+            // This substantially reduces ImageReader buffers and OCR bitmap allocations.
+            val captureWidth = minOf(metrics.widthPixels, 720)
+            val captureHeight = (metrics.heightPixels.toFloat() * captureWidth / metrics.widthPixels)
+                .toInt().coerceAtLeast(1)
+            reader = ImageReader.newInstance(captureWidth, captureHeight, PixelFormat.RGBA_8888, 2)
             reader?.setOnImageAvailableListener({ source -> processLatestFrame(source) }, null)
             display = projection?.createVirtualDisplay(
-                "ErezAI-screen", metrics.widthPixels, metrics.heightPixels, metrics.densityDpi,
+                "ErezAI-screen", captureWidth, captureHeight, metrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader?.surface, null, null
             )
         } else stopSelf()
@@ -113,7 +118,7 @@ class ScreenCaptureService : Service() {
             padded.recycle()
             // OCR and image inference do not need the phone's full native resolution.
             // Downscale immediately to cap transient bitmap memory and processing cost.
-            val maxDimension = 960
+            val maxDimension = 1600
             val scale = minOf(1f, maxDimension.toFloat() / maxOf(cropped.width, cropped.height))
             if (scale < 1f) {
                 val scaled = Bitmap.createScaledBitmap(
