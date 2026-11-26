@@ -393,10 +393,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             }
             else -> {
                 if (ErezAiBrain.isReady()) {
-                    speak("אני חושב…")
-                    ErezAiBrain.ask(t, { chunk -> runOnUiThread { log.append(chunk) } },
-                        { runOnUiThread { log.append("\\n") } },
-                        { error -> runOnUiThread { speak(error) } })
+                    val answer = StringBuilder()
+                    speak("קיבלתי. אני חושב על זה…")
+                    ErezAiBrain.ask(
+                        t,
+                        { chunk -> answer.append(chunk) },
+                        {
+                            runOnUiThread {
+                                val reply = answer.toString().trim()
+                                speak(reply.ifBlank { "לא הצלחתי להפיק תשובה. נסה שוב." })
+                            }
+                        },
+                        { error -> runOnUiThread { speak("נתקלתי בבעיה ביצירת התשובה: $error") } }
+                    )
                 } else speak("מוח הבינה עדיין נטען או שהטעינה נכשלה. בדוק את הודעת השגיאה במסך ולחץ על ״נסה שוב״.")
             }
         }
