@@ -22,6 +22,10 @@ import androidx.core.content.ContextCompat
 import java.util.Locale
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
+    companion object {
+        const val EXTRA_REQUEST_SCREEN_CAPTURE = "request_screen_capture"
+    }
+
     private lateinit var log: TextView
     private lateinit var command: EditText
     private lateinit var modelRetryButton: Button
