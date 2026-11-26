@@ -373,12 +373,16 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     // Preserve the source language. Hebrew text is passed to the
                     // Hebrew TTS voice rather than translated into English.
                     speak(latestText.take(3500))
-                } else if (latestScreenImagePath.isNotBlank() && ErezAiBrain.isReady()) {
-                    val snapshot = java.io.File(latestScreenImagePath)
-                    askAi(
-                        "Transcribe all readable text visible in this image exactly as written. Preserve every original language and script, especially Hebrew. Do not translate, summarize, or transliterate. Return only the transcription.",
-                        snapshot
-                    )
+                } else if (latestScreenImagePath.isNotBlank()) {
+                    if (ErezAiBrain.isReady()) {
+                        val snapshot = java.io.File(latestScreenImagePath)
+                        askAi(
+                            "Transcribe all readable text visible in this image exactly as written. Preserve every original language and script, especially Hebrew. Do not translate, summarize, or transliterate. Return only the transcription.",
+                            snapshot
+                        )
+                    } else {
+                        speak("The local AI brain is not ready to read this image yet.")
+                    }
                 } else {
                     pendingScreenCommand = command
                     requestScreenCapture()
