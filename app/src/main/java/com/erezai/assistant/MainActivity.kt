@@ -48,6 +48,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 latestScreenFramePaths = emptyList()
                 screenConsentRequested = false
                 say("Screen sharing stopped.")
+            } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_CAPTURE_DONE) {
+                screenConsentRequested = false
+                say("One-shot screen capture complete.")
             } else {
                 latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
                     ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
@@ -132,6 +135,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             addAction(ScreenCaptureService.ACTION_SCREEN_TEXT)
             addAction(ErezAccessibilityService.ACTION_ACCESSIBILITY_TEXT)
             addAction(ScreenCaptureService.ACTION_SCREEN_STOPPED)
+            addAction(ScreenCaptureService.ACTION_SCREEN_CAPTURE_DONE)
         }
         ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
