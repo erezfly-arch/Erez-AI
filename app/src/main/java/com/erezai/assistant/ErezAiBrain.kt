@@ -277,36 +277,68 @@ object ErezAiBrain {
         target.parentFile?.mkdirs()
         val temp = File(target.parentFile, target.name + ".download")
 
-        // A partial file larger than the manifest size cannot be resumed safely.
+        // Keep a valid completed download, otherwise resume only when the CDN
+        // explicitly confirms the requested byte range.
         if (temp.length() > MODEL_BYTES) temp.delete()
         if (temp.length() == MODEL_BYTES) {
-            if (!sha256(temp).equals(MODEL_SHA256, ignoreCase = true)) temp.delete()
-            else {
+            if (sha256(temp).equals(MODEL_SHA256, ignoreCase = true)) {
                 if (target.exists()) target.delete()
                 if (temp.renameTo(target)) return
                 throw IllegalStateException("לא ניתן לשמור את קובץ המודל")
             }
+            temp.delete()
         }
 
-        // Download in bounded byte ranges. This prevents a CDN/Xet response from
-        // silently appending an entire object to a resumed partial download.
         val chunkSize = 8L * 1024L * 1024L
         while (temp.length() < MODEL_BYTES) {
             val offset = temp.length()
             val end = minOf(offset + chunkSize - 1L, MODEL_BYTES - 1L)
             val connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 30000
-                readTimeout = 120000
+                readTimeout = 180000
                 instanceFollowRedirects = true
                 setRequestProperty("User-Agent", "ErezAI-Android")
                 setRequestProperty("Accept-Encoding", "identity")
-                setRequestProperty("Range", "bytes=$offset-$end")
+                if (offset > 0L) setRequestProperty("Range", "bytes=$offset-$end")
             }
             try {
                 connection.connect()
                 val code = connection.responseCode
+                if (code == HttpURLConnection.HTTP_OK) {
+                    // Hugging Face/Xet may ignore a Range header. Never append a
+                    // full response to a partial file: restart and stream it once.
+                    if (offset > 0L) {
+                        temp.delete()
+                        throw RetryFullDownloadException()
+                    }
+                    val declaredLength = connection.getHeaderFieldLong("Content-Length", -1L)
+                    if (declaredLength > 0L && declaredLength != MODEL_BYTES) {
+                        throw IllegalStateException("שרת המודל החזיר קובץ בגודל לא צפוי ($declaredLength בתים).")
+                    }
+                    connection.inputStream.use { input ->
+                        java.io.FileOutputStream(temp, false).buffered().use { output ->
+                            val buffer = ByteArray(256 * 1024)
+                            var received = 0L
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                received += count
+                                if (received > MODEL_BYTES) {
+                                    throw IllegalStateException("השרת שלח יותר נתונים מגודל המודל הצפוי.")
+                                }
+                                output.write(buffer, 0, count)
+                                progress(received, MODEL_BYTES)
+                            }
+                            output.flush()
+                        }
+                    }
+                    if (temp.length() != MODEL_BYTES) {
+                        throw IllegalStateException("ההורדה נעצרה: התקבלו ${temp.length()} מתוך $MODEL_BYTES בתים. אפשר לנסות שוב.")
+                    }
+                    break
+                }
                 if (code != HttpURLConnection.HTTP_PARTIAL) {
-                    throw IllegalStateException("שרת המודל לא כיבד בקשת טווח (HTTP $code). נסה שוב; ההורדה החלקית נשמרה.")
+                    throw IllegalStateException("שרת המודל החזיר שגיאת HTTP $code. ההורדה החלקית נשמרה.")
                 }
                 val contentRange = connection.getHeaderField("Content-Range").orEmpty()
                 val match = Regex("bytes (\\d+)-(\\d+)/(\\d+)").matchEntire(contentRange)
@@ -314,15 +346,11 @@ object ErezAiBrain {
                 val rangeStart = match.groupValues[1].toLong()
                 val rangeEnd = match.groupValues[2].toLong()
                 val total = match.groupValues[3].toLong()
-                if (rangeStart != offset || rangeEnd != end || total != MODEL_BYTES) {
-                    // Never append bytes from a different model revision to a partial download.
+                if (rangeStart != offset || rangeEnd < rangeStart || rangeEnd > end || total != MODEL_BYTES) {
                     temp.delete()
-                    throw IllegalStateException(
-                        "שרת המודל החזיר גרסה או טווח לא תואמים (גודל מדווח: $total bytes). " +
-                            "ההורדה החלקית נמחקה כדי למנוע קובץ פגום. נסה שוב."
-                    )
+                    throw IllegalStateException("שרת המודל החזיר טווח או גודל שאינם תואמים לגרסה המאומתת. ההורדה החלקית נמחקה.")
                 }
-                val expectedChunk = end - offset + 1L
+                val expectedChunk = rangeEnd - rangeStart + 1L
                 var received = 0L
                 connection.inputStream.use { input ->
                     java.io.FileOutputStream(temp, true).buffered().use { output ->
@@ -340,6 +368,9 @@ object ErezAiBrain {
                 if (received != expectedChunk) {
                     throw IllegalStateException("החיבור נותק לאחר $received מתוך $expectedChunk בתים במקטע. אפשר להמשיך מאותה נקודה.")
                 }
+            } catch (_: RetryFullDownloadException) {
+                // The next iteration starts from zero without a Range header.
+                continue
             } finally {
                 connection.disconnect()
             }
@@ -356,6 +387,8 @@ object ErezAiBrain {
         if (target.exists()) target.delete()
         if (!temp.renameTo(target)) throw IllegalStateException("לא ניתן לשמור את קובץ המודל")
     }
+
+    private class RetryFullDownloadException : Exception()
 
     private fun verifySha256(file: File) {
         if (!sha256(file).equals(MODEL_SHA256, ignoreCase = true)) {
