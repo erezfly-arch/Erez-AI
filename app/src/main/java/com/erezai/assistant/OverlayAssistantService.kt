@@ -135,11 +135,11 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
 
     private fun speak(message: String) {
         statusText?.text = message
+        val containsHebrew = message.any { it.code in 0x0590..0x05FF }
         if (tts == null || !ttsReady) {
-            pendingSpeech = message
+            if (containsHebrew) speakHebrewOffline(message) else pendingSpeech = message
             return
         }
-        val containsHebrew = message.any { it.code in 0x0590..0x05FF }
         val requestedLocale = if (containsHebrew) Locale("he", "IL") else Locale.US
         val languageResult = tts?.setLanguage(requestedLocale) ?: TextToSpeech.LANG_NOT_SUPPORTED
         if (languageResult < TextToSpeech.LANG_AVAILABLE) {
