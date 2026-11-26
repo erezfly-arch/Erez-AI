@@ -25,8 +25,8 @@ import kotlin.concurrent.thread
 import kotlin.math.sqrt
 
 /**
- * Visible foreground microphone session with fully offline English Whisper ASR.
- * The mic is user-started and can be paused by the assistant while TTS is speaking.
+ * Visible foreground microphone session with offline multilingual Whisper ASR.
+ * The wake phrase is gated by a local speaker-verification profile.
  */
 class VoiceAssistantService : Service() {
     companion object {
@@ -125,11 +125,14 @@ class VoiceAssistantService : Service() {
 
     private fun runOfflineListening() {
         val asr = OfflineEnglishSpeech(applicationContext)
+        val identity = VoiceIdentity(applicationContext)
         offlineSpeech = asr
         try {
-            updateNotification("Downloading the English speech model for the first time…")
+            updateNotification("Preparing offline multilingual speech recognition…")
             asr.initialize { message -> updateNotification(message) }
-            updateNotification("Listening in English · processed on this device")
+            identity.initialize { message -> updateNotification(message) }
+            if (!identity.isEnrolled) throw IllegalStateException("No owner voice profile is enrolled. Open Erez AI and set up your voice profile.")
+            updateNotification("Hey Erez standby is active · speaker verification enabled")
 
             val minBytes = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
@@ -171,8 +174,8 @@ class VoiceAssistantService : Service() {
                     energy += sample * sample
                 }
                 val rms = sqrt(energy / count).toFloat()
-                // A lower threshold helps normal conversational Hebrew, while a short
-                // pre-roll preserves the first syllable that VAD would otherwise clip.
+                // A short
+                // pre-roll preserves the wake phrase first syllable.
                 if (rms >= 0.0038f) {
                     if (!speechStarted) {
                         utterance.addAll(preRoll)
@@ -210,12 +213,18 @@ class VoiceAssistantService : Service() {
                             val wakePhrases = listOf("hey erez")
                             val wakePrefix = wakePhrases.firstOrNull { lower == it || lower.startsWith("$it ") }.orEmpty()
                             if (wakePrefix.isNotEmpty()) {
-                                val command = lower.removePrefix(wakePrefix).trim()
-                                wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
-                                if (command.isBlank()) {
-                                    sendBroadcast(Intent(ACTION_WAKE_HEARD).setPackage(packageName))
+                                val ownerMatched = identity.verify(utterance.toFloatArray())
+                                if (ownerMatched) {
+                                    val command = lower.removePrefix(wakePrefix).trim()
+                                    wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
+                                    if (command.isBlank()) {
+                                        sendBroadcast(Intent(ACTION_WAKE_HEARD).setPackage(packageName))
+                                    } else {
+                                        sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, command))
+                                    }
                                 } else {
-                                    sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, command))
+                                    wakeArmedUntil = 0L
+                                    updateNotification("Wake phrase ignored: speaker did not match the enrolled voice profile.")
                                 }
                             } else if (android.os.SystemClock.elapsedRealtime() < wakeArmedUntil) {
                                 wakeArmedUntil = 0L
@@ -237,6 +246,7 @@ class VoiceAssistantService : Service() {
             try { recorder?.release() } catch (_: Exception) {}
             recorder = null
             try { asr.close() } catch (_: Exception) {}
+            try { identity.close() } catch (_: Exception) {}
             offlineSpeech = null
             if (!running) stopSelf()
         }
