@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 .putExtra("resultCode", result.resultCode)
                 .putExtra("data", result.data)
                 .putExtra(ScreenCaptureService.EXTRA_ONE_SHOT, screenCaptureOneShot)
+            moveTaskToBack(true)
             ContextCompat.startForegroundService(this, i)
             say("Screen sharing is active. I can analyze visible images and text while you use other apps. The notification shows when sharing is active.")
             startVoiceService()
