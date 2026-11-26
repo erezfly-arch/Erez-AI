@@ -40,6 +40,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private var voiceButton: TextView? = null
     private var latestScreenImagePath = ""
     private var latestScreenFramePaths: List<String> = emptyList()
+    @Volatile private var pendingScreenCommand = ""
     private var statusText: TextView? = null
     private var tts: TextToSpeech? = null
     @Volatile private var ttsReady = false
@@ -77,6 +78,13 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 latestScreenImagePath = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_IMAGE_PATH).orEmpty()
                 latestScreenFramePaths = intent?.getStringArrayListExtra(ScreenCaptureService.EXTRA_SCREEN_FRAME_PATHS)?.toList().orEmpty()
                 statusText?.text = latestText.take(500)
+                val pending = pendingScreenCommand
+                if (intent?.action == ScreenCaptureService.ACTION_SCREEN_TEXT &&
+                    pending.isNotBlank() && (latestText.isNotBlank() || latestScreenImagePath.isNotBlank())
+                ) {
+                    pendingScreenCommand = ""
+                    Handler(Looper.getMainLooper()).post { runCommand(pending) }
+                }
             }
         }
     }
@@ -372,12 +380,14 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                         snapshot
                     )
                 } else {
+                    pendingScreenCommand = command
                     requestScreenCapture()
                 }
             }
             lower.contains("what is on my screen") || lower.contains("what do you see") ||
                 lower.contains("describe my screen") || lower.contains("describe the screen") -> {
                 if (latestText.isBlank() && latestScreenImagePath.isBlank()) {
+                    pendingScreenCommand = command
                     requestScreenCapture()
                 } else if (ErezAiBrain.isReady()) {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
@@ -462,6 +472,9 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun requestScreenCapture() {
+        latestText = ""
+        latestScreenImagePath = ""
+        latestScreenFramePaths = emptyList()
         speak("Android needs your approval before I can view the screen. Please approve the screen-sharing prompt.")
         val intent = Intent(this, MainActivity::class.java)
             .putExtra(MainActivity.EXTRA_REQUEST_SCREEN_CAPTURE, true)
