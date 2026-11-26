@@ -83,7 +83,7 @@ class VoiceEnrollmentActivity : Activity() {
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    status.text = "Voice setup failed: \${e.message ?: "unknown error"}. Please try again."
+                    status.text = "Voice setup failed: ${e.message ?: "unknown error"}. Please try again."
                     recordButton.isEnabled = true
                     working = false
                 }
