@@ -287,7 +287,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     val answer = StringBuilder()
                     ErezAiBrain.ask(
                         "Answer the question in English: " + query +
-                            "\\nהשתמש רק במידע הבא. ציין אי-ודאות והצג את הקישורים שסופקו ללא שינוי.\\n\\n" + sourceText,
+                            "\\nUse only the information below. State uncertainty and include the supplied links unchanged.\\n\\n" + sourceText,
                         { part -> answer.append(part) },
                         {
                             runOnUiThread {
