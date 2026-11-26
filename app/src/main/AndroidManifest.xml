@@ -12,6 +12,7 @@
         <uses-native-library android:name="libOpenCL.so" android:required="false" />
         <uses-native-library android:name="libcdsprpc.so" android:required="false" />
         <activity android:name=".ActionConfirmationActivity" android:exported="false" />
+        <activity android:name=".VoiceEnrollmentActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
