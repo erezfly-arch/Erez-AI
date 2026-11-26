@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra(EXTRA_REQUEST_SCREEN_CAPTURE, false)) {
+            screenConsentRequested = false
             screenCaptureOneShot = intent.getBooleanExtra(EXTRA_SCREEN_CAPTURE_ONE_SHOT, true)
             intent.removeExtra(EXTRA_REQUEST_SCREEN_CAPTURE)
             requestScreenCaptureConsent()
