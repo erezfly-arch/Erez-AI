@@ -11,7 +11,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Offline English speech recognition powered by Whisper Base multilingual + sherpa-onnx.
+ * Multilingual offline speech recognition powered by Whisper Base + sherpa-onnx. The wake phrase is checked in English.
  * Model files are downloaded once to app-private storage; recognition never calls a cloud API.
  */
 class OfflineEnglishSpeech(private val context: Context) {
@@ -25,9 +25,9 @@ class OfflineEnglishSpeech(private val context: Context) {
         val encoder = File(modelDir, "base-encoder.int8.onnx")
         val decoder = File(modelDir, "base-decoder.int8.onnx")
         val tokens = File(modelDir, "base-tokens.txt")
-        ensureFile(encoder, ENCODER_URL, 20_000_000L) { onStatus("מוריד מודל זיהוי דיבור מקומי: מקודד…") }
-        ensureFile(decoder, DECODER_URL, 80_000_000L) { onStatus("מוריד מודל זיהוי דיבור מקומי: מפענח…") }
-        ensureFile(tokens, TOKENS_URL, 100_000L) { onStatus("מוריד מילון עברית…") }
+        ensureFile(encoder, ENCODER_URL, 20_000_000L) { onStatus("Downloading the offline speech model: encoder…") }
+        ensureFile(decoder, DECODER_URL, 80_000_000L) { onStatus("Downloading the offline speech model: decoder…") }
+        ensureFile(tokens, TOKENS_URL, 100_000L) { onStatus("Downloading speech tokens…") }
 
         val config = OfflineRecognizerConfig(
             featConfig = FeatureConfig(sampleRate = 16000, featureDim = 80),
@@ -35,7 +35,7 @@ class OfflineEnglishSpeech(private val context: Context) {
                 whisper = OfflineWhisperModelConfig(
                     encoder = encoder.absolutePath,
                     decoder = decoder.absolutePath,
-                    language = "en",
+                    language = "auto",
                     task = "transcribe"
                 ),
                 tokens = tokens.absolutePath,
