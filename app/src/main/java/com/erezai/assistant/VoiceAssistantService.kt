@@ -82,7 +82,7 @@ class VoiceAssistantService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Preparing offline speech recognition…"))
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            updateNotification("אין הרשאת מיקרופון. Listening stopped.")
+            updateNotification("Microphone permission is missing. Listening stopped.")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -207,7 +207,7 @@ class VoiceAssistantService : Service() {
                                 .replace(Regex("[^\\p{L}\\p{N}\\s]+"), " ")
                                 .replace(Regex("\\s+"), " ")
                                 .trim()
-                            val wakePhrases = listOf("hey erez", "hey eric", "hey aris")
+                            val wakePhrases = listOf("hey erez")
                             val wakePrefix = wakePhrases.firstOrNull { lower == it || lower.startsWith("$it ") }.orEmpty()
                             if (wakePrefix.isNotEmpty()) {
                                 val command = lower.removePrefix(wakePrefix).trim()
@@ -230,7 +230,7 @@ class VoiceAssistantService : Service() {
             }
         } catch (e: Exception) {
             Log.e("ErezAI", "Offline voice session failed", e)
-            if (running) updateNotification("Offline listening error: ${e.message ?: "לא ידועה"}")
+            if (running) updateNotification("Offline listening error: ${e.message ?: "unknown"}")
             running = false
         } finally {
             try { recorder?.stop() } catch (_: Exception) {}
