@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 latestScreenText = ""
                 latestScreenImagePath = ""
                 latestScreenFramePaths = emptyList()
-                say("שיתוף המסך נעצר.")
+                say("Screen sharing stopped.")
             } else {
                 latestScreenText = intent?.getStringExtra(ScreenCaptureService.EXTRA_SCREEN_TEXT)
                     ?: intent?.getStringExtra(ErezAccessibilityService.EXTRA_ACCESSIBILITY_TEXT).orEmpty()
@@ -54,21 +54,21 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             val i = Intent(this, ScreenCaptureService::class.java)
                 .putExtra("resultCode", result.resultCode).putExtra("data", result.data)
             ContextCompat.startForegroundService(this, i)
-            say("שיתוף המסך הופעל. אני מנתח תמונות וטקסט. אפשר לעבור לאפליקציה אחרת; ההתראה תציג שהשיתוף פעיל.")
+            say("Screen sharing is active. I can analyze visible images and text while you use other apps. The notification shows when sharing is active.")
             startVoiceService()
         } else {
-            say("שיתוף המסך לא אושר. אפשר להמשיך בשיחה קולית, אבל לא אוכל לראות את המסך.")
+            say("Screen sharing was not approved. Voice chat can continue, but I cannot see your screen.")
             startVoiceService()
         }
     }
 
     private val microphonePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) ensureOverlayAndStartVoice()
-        else say("כדי שארז יוכל להאזין ולדבר, נדרשת הרשאת מיקרופון. אפשר לאשר אותה בהגדרות Android.")
+        else say("Erez needs microphone permission to listen and speak. You can grant it in Android settings.")
     }
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) say("התראות לא אושרו; ממשיך בהגדרת ארז AI.")
+        if (!granted) say("Notifications were not enabled. Continuing Erez AI setup.")
         requestMicrophonePermission()
     }
 
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         // First-run setup is automatic: prepare the local AI model and request
         // the minimum permissions in sequence instead of asking the user to find
         // separate download/start buttons.
-        say("מתחיל להכין את ארז AI. הורדת המודל המקומי עשויה להיות גדולה ודורשת חיבור Wi-Fi ואחסון פנוי.")
+        say("Preparing Erez AI. The initial local model download is large and requires Wi-Fi and free storage.")
         prepareBrain()
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -113,14 +113,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale("he", "IL")
-            val hebrewMale = tts?.voices?.firstOrNull { voice ->
-                voice.locale.language == "he" &&
+            tts?.language = Locale.US
+            val englishVoice = tts?.voices?.firstOrNull { voice ->
+                voice.locale.language == "en" &&
                     (voice.name.contains("male", ignoreCase = true) || voice.name.contains("masculine", ignoreCase = true))
             }
-            if (hebrewMale != null) tts?.voice = hebrewMale
+            if (englishVoice != null) tts?.voice = englishVoice
             tts?.setPitch(1.0f)
-            if (hebrewMale == null) say("לא נמצא במכשיר קול גברי עברי ייעודי. כרגע ייעשה שימוש בקול העברי המותקן.")
+            if (englishVoice == null) say("No dedicated English male voice was found. Using the installed English voice.")
             tts?.setSpeechRate(0.94f)
             tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { sendBroadcast(Intent(VoiceAssistantService.ACTION_PAUSE).setPackage(packageName)) }
@@ -138,17 +138,17 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             setBackgroundColor(0xFF101827.toInt())
         }
         val title = TextView(this).apply {
-            text = "ארז AI"; textSize = 30f; setTextColor(-1)
+            text = "Erez AI"; textSize = 30f; setTextColor(-1)
             gravity = Gravity.CENTER; setPadding(0, 0, 0, 18)
         }
         val subtitle = TextView(this).apply {
-            text = "העוזר האישי שלך · עברית"; setTextColor(0xFFB7C4D8.toInt()); gravity = Gravity.CENTER
+            text = "Your personal AI assistant · English"; setTextColor(0xFFB7C4D8.toInt()); gravity = Gravity.CENTER
         }
         command = EditText(this).apply {
-            hint = "כתוב לי מה לעשות…"; textSize = 17f; setTextColor(-1); setHintTextColor(0xFF9AA8BA.toInt())
+            hint = "Tell me what to do…"; textSize = 17f; setTextColor(-1); setHintTextColor(0xFF9AA8BA.toInt())
         }
         log = TextView(this).apply {
-            text = "שלום. ארז AI ממתין לטעינת המודל המקומי.\n"
+            text = "שלום. Erez AI ממתין לטעינת המודל המקומי.\n"
             setTextColor(-1)
             textSize = 16f
             setPadding(0, 20, 0, 20)
@@ -159,16 +159,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         root.addView(subtitle)
         root.addView(command)
         root.addView(TextView(this).apply {
-            text = "ההתקנה והכנת המודלים מתבצעות אוטומטית ברקע."
+            text = "Model installation and setup run automatically in the background."
             setTextColor(0xFFB7C4D8.toInt())
             textSize = 14f
             setPadding(0, 12, 0, 12)
         })
-        root.addView(button("שלח הוראה") { handle(command.text.toString()) })
-        modelRetryButton = button("נסה לטעון את מוח הבינה שוב") { prepareBrain() }.apply { visibility = android.view.View.GONE }
+        root.addView(button("Send command") { handle(command.text.toString()) })
+        modelRetryButton = button("Retry AI engine") { prepareBrain() }.apply { visibility = android.view.View.GONE }
         root.addView(modelRetryButton)
         root.addView(TextView(this).apply {
-            text = "השיחה, ההאזנה והצפייה במסך מופעלות אוטומטית לאחר אישורי Android. אפשר לעצור דרך ההתראה של ארז AI."
+            text = "השיחה, ההאזנה והצפייה במסך מופעלות אוטומטית לאחר אישורי Android. אפשר לעצור דרך ההתראה של Erez AI."
             setTextColor(0xFFB7C4D8.toInt())
             textSize = 13f
             setPadding(0, 10, 0, 10)
@@ -179,23 +179,23 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private fun prepareBrain() {
         if (ErezAiBrain.isReady()) {
-            say("מוח הבינה כבר מוכן.")
+            say("The AI engine is ready.")
             return
         }
         if (::modelRetryButton.isInitialized) {
             modelRetryButton.isEnabled = false
-            modelRetryButton.text = "טוען את מוח הבינה…"
+            modelRetryButton.text = "Loading AI engine…"
             modelRetryButton.visibility = android.view.View.VISIBLE
         }
         ErezAiBrain.prepare(this) { message ->
             runOnUiThread {
                 say(message)
-                val failed = message.startsWith("טעינת מוח הבינה נכשלה")
-                val ready = message.contains("מוח הבינה המקומי מוכן")
+                val failed = message.startsWith("AI engine failed to load")
+                val ready = message.contains("Local AI engine is ready")
                 if (::modelRetryButton.isInitialized) {
                     modelRetryButton.visibility = if (failed) android.view.View.VISIBLE else android.view.View.GONE
                     modelRetryButton.isEnabled = failed
-                    modelRetryButton.text = if (failed) "הטעינה נכשלה — נסה שוב" else if (ready) "מוח הבינה מוכן" else "טוען את מוח הבינה…"
+                    modelRetryButton.text = if (failed) "Loading failed — retry" else if (ready) "AI engine ready" else "Loading AI engine…"
                 }
             }
         }
@@ -216,7 +216,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private fun ensureOverlayAndStartVoice() {
         if (!android.provider.Settings.canDrawOverlays(this)) {
             pendingVoiceStart = true
-            say("נדרשת הרשאה חד-פעמית להצגת ארז מעל אפליקציות. פתח את מסך ההרשאה של Android ואשר; ארז ימשיך אוטומטית כשתחזור.")
+            say("One-time permission is required to display Erez over other apps. Open Android permission settings and approve; Erez will continue automatically when you return.")
             startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
@@ -226,7 +226,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private fun requestScreenCaptureConsent() {
         if (screenConsentRequested) return
         screenConsentRequested = true
-        say("נדרש אישור Android חד-פעמי לשיתוף המסך. אשר בחלון שיופיע כדי שארז יוכל להבין מה מוצג באפליקציות.")
+        say("Android requires one-time consent for screen sharing. Approve the system prompt so Erez can understand what is shown in apps.")
         val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         screenConsent.launch(mgr.createScreenCaptureIntent())
     }
@@ -243,40 +243,40 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
             // Keep overlay startup lightweight; do not load heavy AI models here.
             startService(Intent(this, OverlayAssistantService::class.java))
-            say("הפעלתי את שירות ההאזנה המקומי. לאחר טעינת מודל הדיבור, הפקודות יתחילו במילת ההפעלה ״ארז שומע?״. אפשר לעצור דרך ההתראה.")
+            say("The local listening service has started. After the speech model loads, say “Hey Erez” to activate a command. Stop listening from the notification.")
         } catch (_: Exception) {
             voiceStartupRequested = false
-            say("לא הצלחתי להפעיל האזנה ברקע. בדוק שהרשאת המיקרופון וההתראות מאושרות.")
+            say("Could not start background listening. Check microphone and notification permissions.")
         }
     }
 
     private fun searchWeb(query: String) {
-        say("מחפש ברשת ללא מפתח API…")
+        say("Searching the web without an API key…")
         Thread {
             try {
                 val results = FreeWebSearch.search(query)
                 if (results.isEmpty()) {
-                    runOnUiThread { speak("לא התקבלו תוצאות חיפוש.") }
+                    runOnUiThread { speak("No search results were returned.") }
                     return@Thread
                 }
                 val sourceText = results.mapIndexed { index, result ->
-                    "${index + 1}. ${result.title}\n${result.snippet}\nקישור: ${result.url}"
+                    "${index + 1}. ${result.title}\n${result.snippet}\nLink: ${result.url}"
                 }.joinToString("\n\n")
                 if (!ErezAiBrain.isReady()) {
                     runOnUiThread {
                         log.append("\\n" + sourceText)
-                        speak("מצאתי ${results.size} תוצאות. טען את מוח הבינה המקומי כדי לקבל סיכום.")
+                        speak("Found ${results.size} results. Load the local AI engine for a summary.")
                     }
                 } else {
                     val answer = StringBuilder()
                     ErezAiBrain.ask(
-                        "ענה בעברית על השאלה: " + query +
+                        "Answer the question in English: " + query +
                             "\\nהשתמש רק במידע הבא. ציין אי-ודאות והצג את הקישורים שסופקו ללא שינוי.\\n\\n" + sourceText,
                         { part -> answer.append(part) },
                         {
                             runOnUiThread {
                                 log.append("\\n" + answer.toString())
-                                log.append("\\nמקורות:\\n" + results.joinToString("\\n") { it.title + " — " + it.url })
+                                log.append("\\nSources:\\n" + results.joinToString("\\n") { it.title + " — " + it.url })
                                 speak(answer.toString().take(900))
                             }
                         },
@@ -284,7 +284,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     )
                 }
             } catch (e: Exception) {
-                runOnUiThread { speak("החיפוש נכשל: ${e.message ?: "שגיאת רשת"}") }
+                runOnUiThread { speak("Search failed: ${e.message ?: "network error"}") }
             }
         }.start()
     }
@@ -320,98 +320,98 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private fun handle(raw: String) {
         val t = raw.trim()
         if (t.isEmpty()) return
-        say("אתה: $t")
+        say("You: $t")
         when {
-            t.contains("מה אתה רואה") || t.contains("תאר את המסך") -> {
+            t.contains("what do you see") || t.contains("describe the screen") -> {
                 if (!ErezAiBrain.isReady()) {
-                    speak("מוח הבינה המקומי עדיין לא נטען. יש להשלים את ההורדה הראשונית.")
+                    speak("The local AI engine is not ready yet. Complete the initial download.")
                 } else {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
                     val answer = StringBuilder()
-                    val prompt = "תאר בעברית מה מופיע במסך ומה קורה. השתמש בתמונות המסך עצמן ובטקסט שזוהה.\n" + latestScreenText.take(5000)
+                    val prompt = "Describe what is visible on the screen and what is happening. Use the screenshot itself and the recognized text.\n" + latestScreenText.take(5000)
                     val onChunk: (String) -> Unit = { part -> answer.append(part) }
-                    val onDone: () -> Unit = { runOnUiThread { speak(answer.toString().ifBlank { "הניתוח הסתיים." }) } }
+                    val onDone: () -> Unit = { runOnUiThread { speak(answer.toString().ifBlank { "Analysis complete." }) } }
                     val onError: (String) -> Unit = { error -> runOnUiThread { speak(error) } }
                     // Answer from the newest screenshot immediately. Multi-frame video
                     // analysis is an explicit heavier task, not the default screen response.
                     ErezAiBrain.ask(prompt, onChunk, onDone, onError, snapshot)
                 }
             }
-            t.contains("תגובה") || t.contains("הגב") -> {
-                if (!ErezAiBrain.isReady()) speak("כדי לנסח תגובה, צריך לטעון קודם את מוח הבינה המקומי.")
+            t.contains("comment") || t.contains("reply") -> {
+                if (!ErezAiBrain.isReady()) speak("כדי לנסח comment, צריך לטעון קודם את מוח הבינה המקומי.")
                 else {
                     val draft = StringBuilder()
                     ErezAiBrain.ask(
-                        "נסח תגובה בעברית טבעית וקצרה שמתאימה לפוסט או לסרטון שמופיעים במסך. החזר רק את נוסח התגובה. בקשת המשתמש: " +
-                            t + "\\nתוכן המסך:\\n" + latestScreenText.take(5000),
+                        "נסח comment בעברית טבעית וקצרה שמתאימה לפוסט או לסרטון שמופיעים במסך. החזר רק את נוסח הcomment. בקשת המשתמש: " +
+                            t + "\\nScreen content:\\n" + latestScreenText.take(5000),
                         { part -> draft.append(part) },
-                        { runOnUiThread { confirmAction(ActionConfirmationActivity.TYPE_COMMENT, "טיוטת תגובה להעתקה", draft.toString()) } },
+                        { runOnUiThread { confirmAction(ActionConfirmationActivity.TYPE_COMMENT, "טיוטת comment להעתקה", draft.toString()) } },
                         { error -> runOnUiThread { speak(error) } }
                     )
                 }
             }
-            t.contains("וואטסאפ") || t.contains("whatsapp", ignoreCase = true) -> {
-                val messageStart = if (t.contains("וואטסאפ")) t.substringAfter("וואטסאפ") else {
+            t.contains("WhatsApp") || t.contains("whatsapp", ignoreCase = true) -> {
+                val messageStart = if (t.contains("WhatsApp")) t.substringAfter("WhatsApp") else {
                     val marker = t.indexOf("whatsapp", ignoreCase = true)
                     if (marker >= 0) t.substring(marker + "whatsapp".length) else t
                 }
                 val msg = messageStart.trim().replaceFirst(Regex("^ל[^\\s,:]+:?\\s*"), "")
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
-                confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", msg, phone = phone)
+                confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "WhatsApp message", msg, phone = phone)
             }
-            t.contains("מייל") || t.contains("אימייל") -> {
+            t.contains("email") || t.contains("איemail") -> {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(t)?.value.orEmpty()
-                val subject = t.substringAfter("נושא", "הודעה מארז AI").substringBefore("תוכן").trim().ifBlank { "הודעה מארז AI" }
+                val subject = t.substringAfter("subject", "הודעה מErez AI").substringBefore("body").trim().ifBlank { "הודעה מErez AI" }
                 if (ErezAiBrain.isReady()) {
                     val draft = StringBuilder()
                     ErezAiBrain.ask(
-                        "נסח גוף של הודעת דואר בעברית לפי בקשת המשתמש. החזר רק את גוף ההודעה, בלי כותרות. בקשה: " + t,
+                        "Write the email body in English based on the user request. Return only the body, without headings. Request: " + t,
                         { part -> draft.append(part) },
                         { runOnUiThread { confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, draft.toString(), recipient = recipient) } },
                         { error -> runOnUiThread { speak(error) } }
                     )
                 } else {
-                    val body = t.substringAfter("תוכן", t.substringAfter("כתוב", t)).trim()
+                    val body = t.substringAfter("body", t.substringAfter("כתוב", t)).trim()
                     confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, body, recipient = recipient)
                 }
             }
-            t.contains("התקשר") || t.contains("חייג") -> {
+            t.contains("call") || t.contains("dial") -> {
                 val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
                 confirmAction(
                     ActionConfirmationActivity.TYPE_CALL,
-                    if (number.isBlank()) "בחר איש קשר לחיוג" else "חיוג למספר $number",
+                    if (number.isBlank()) "Choose a contact to call" else "Calling $number",
                     "",
                     phone = number
                 )
             }
-            t.contains("תזכורת") || t.contains("יומן") -> {
-                val title = t.substringAfter("תזכורת", t.substringAfter("יומן", t)).trim()
-                confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "תזכורת חדשה" }, "")
+            t.contains("reminder") || t.contains("calendar") -> {
+                val title = t.substringAfter("reminder", t.substringAfter("calendar", t)).trim()
+                confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "reminder חדשה" }, "")
             }
-            t.contains("חפש") || t.contains("גוגל") || t.contains("אינטרנט") -> {
-                searchWeb(t.removePrefix("חפש").removePrefix(" לי").removeSuffix("באינטרנט").trim())
+            t.contains("search") || t.contains("Google") || t.contains("web") -> {
+                searchWeb(t.removePrefix("search").removePrefix(" לי").removeSuffix("בweb").trim())
             }
             else -> {
                 if (ErezAiBrain.isReady()) {
                     val answer = StringBuilder()
                     val previousLog = log.text.toString()
-                    speak("קיבלתי. אני חושב על זה…")
+                    speak("Got it. Let me think…")
                     ErezAiBrain.ask(
                         t,
                         { chunk ->
                             answer.append(chunk)
                             val partial = answer.toString()
-                            runOnUiThread { log.text = previousLog + "\nארז: " + partial }
+                            runOnUiThread { log.text = previousLog + "\nErez: " + partial }
                         },
                         {
                             runOnUiThread {
                                 val reply = answer.toString().trim()
-                                speak(reply.ifBlank { "המודל סיים בלי להחזיר תשובה. אפשר לנסות שוב." })
+                                speak(reply.ifBlank { "The model finished without returning an answer. Please try again." })
                             }
                         },
-                        { error -> runOnUiThread { speak("נתקלתי בבעיה ביצירת התשובה: $error") } }
+                        { error -> runOnUiThread { speak("I ran into a problem creating the answer: $error") } }
                     )
-                } else speak("מוח הבינה עדיין נטען או שהטעינה נכשלה. בדוק את הודעת השגיאה במסך ולחץ על ״נסה שוב״.")
+                } else speak("The AI engine is still loading or failed. Check the error message and tap Retry.")
             }
         }
     }
