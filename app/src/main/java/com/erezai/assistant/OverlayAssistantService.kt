@@ -115,7 +115,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             val queued = pendingSpeech
             pendingSpeech = ""
             if (queued.isNotBlank() && ttsReady) speak(queued)
-            else if (!ttsReady) statusText?.text = "אין במכשיר קול עברי מותקן. יש להתקין נתוני עברית במנוע הדיבור של Android."
+            else if (!ttsReady) statusText?.text = "English speech data is not installed. Install an English voice in Android text-to-speech settings."
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_PAUSE) }
                 override fun onDone(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_RESUME) }
@@ -202,7 +202,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         if (voiceListening) {
             startService(Intent(this, VoiceAssistantService::class.java).setAction(VoiceAssistantService.ACTION_STOP))
             voiceListening = false
-            button.text = "🎙️ דבר עם ארז"
+            button.text = "🎙️ Wake-word standby"
             speak("Wake-word listening stopped.")
             return
         }
@@ -216,7 +216,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             val intent = Intent(this, VoiceAssistantService::class.java)
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
             voiceListening = true
-            button.text = "⏹ עצור האזנה"
+            button.text = "⏹ Stop listening"
             speak("Wake-word standby is active. Say Hey Erez.")
         } catch (e: Exception) {
             speak("Could not start the microphone: ${e.message ?: "unknown error"}")
@@ -277,7 +277,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val mic = styledButton(if (voiceListening) "⏹ עצור האזנה" else "🎙️ דבר עם ארז", 0xFF7C3AED.toInt()) {
+        val mic = styledButton(if (voiceListening) "⏹ Stop listening" else "🎙️ Wake-word standby", 0xFF7C3AED.toInt()) {
             toggleVoice(it as TextView)
         }
         voiceButton = mic
@@ -291,7 +291,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             gravity = Gravity.CENTER
         }
         secondary.addView(styledButton("Read screen", 0xFF0F766E.toInt()) {
-            runCommand("מה במסך?")
+            runCommand("Read the screen")
         }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(5) })
         secondary.addView(styledButton("Close", 0xFF475569.toInt()) {
             hidePanel()
@@ -431,32 +431,32 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun searchWeb(query: String) {
-        speak("מחפש ברשת. החיפוש אינו דורש מפתח API או תשלום.")
+        speak("Searching the web.")
         Thread {
             try {
                 val results = FreeWebSearch.search(query)
                 if (results.isEmpty()) {
-                    Handler(Looper.getMainLooper()).post { speak("לא התקבלו תוצאות חיפוש. אפשר לנסות ניסוח אחר או לפתוח את הדפדפן.") }
+                    Handler(Looper.getMainLooper()).post { speak("No search results were returned. Try a different query.") }
                     return@Thread
                 }
                 val sourceText = results.mapIndexed { index, result ->
-                    "${index + 1}. ${result.title}\n${result.snippet}\nקישור: ${result.url}"
+                    "${index + 1}. ${result.title}\n${result.snippet}\nLink: ${result.url}"
                 }.joinToString("\n\n")
                 if (!ErezAiBrain.isReady()) {
                     Handler(Looper.getMainLooper()).post {
                         statusText?.text = sourceText
-                        speak("מצאתי ${results.size} תוצאות. טען את מוח הבינה המקומי כדי לקבל סיכום.")
+                        speak("Found ${results.size} results. The local AI brain is needed for a summary.")
                     }
                     return@Thread
                 }
                 val answer = StringBuilder()
                 ErezAiBrain.ask(
-                    "ענה בעברית על השאלה: " + query +
-                        "\nהשתמש רק במידע הבא. ציין אי-ודאות, ובסוף הצג את הקישורים שסופקו ללא שינוי.\n\n" + sourceText,
+                    "Answer in natural English: " + query +
+                        "\nUse only the information below. State uncertainty and include the supplied links unchanged.\n\n" + sourceText,
                     { part -> answer.append(part) },
                     {
                         Handler(Looper.getMainLooper()).post {
-                            statusText?.text = answer.toString() + "\n\nמקורות:\n" + results.joinToString("\n") { it.title + " — " + it.url }
+                            statusText?.text = answer.toString() + "\n\nSources:\n" + results.joinToString("\n") { it.title + " — " + it.url }
                             speak(answer.toString().take(900))
                         }
                     },
@@ -464,7 +464,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 )
             } catch (e: Exception) {
                 Handler(Looper.getMainLooper()).post {
-                    speak("החיפוש נכשל: ${e.message ?: "שגיאת רשת"}. אפשר לפתוח את הדפדפן.")
+                    speak("Search failed: ${e.message ?: "network error"}.")
                 }
             }
         }.start()
@@ -493,7 +493,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         framePaths: List<String> = emptyList()
     ) {
         val answer = StringBuilder()
-        speak("אני מנתח את התוכן…")
+        speak("Analyzing the content…")
         val onChunk: (String) -> Unit = { chunk ->
             answer.append(chunk)
             val partial = answer.toString()
@@ -502,7 +502,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         val onDone: () -> Unit = {
             Handler(Looper.getMainLooper()).post {
                 val reply = answer.toString().trim()
-                speak(reply.ifBlank { "המודל סיים בלי להחזיר תשובה. אפשר לנסות שוב." })
+                speak(reply.ifBlank { "The model returned an empty response. Please try again." })
             }
         }
         val onError: (String) -> Unit = { error ->
