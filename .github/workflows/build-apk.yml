@@ -1,7 +1,7 @@
 name: Build Android APK
 on:
   push:
-    branches: [ main ]
+    branches: [ main, english-core-hey-erez ]
   workflow_dispatch:
 permissions:
   contents: read
