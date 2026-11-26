@@ -375,7 +375,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 speak("WhatsApp voice-note replies are not connected yet. I will not send a typed message instead.")
             }
             lower.contains("call ") || lower.startsWith("call") || lower.contains("dial ") -> {
-                val number = Regex("\+?[0-9][0-9\- ]{6,}").find(command)?.value.orEmpty()
+                val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(command)?.value.orEmpty()
                 confirmAction(
                     ActionConfirmationActivity.TYPE_CALL,
                     if (number.isBlank()) "Choose a contact to call" else "Call $number",
@@ -384,7 +384,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 )
             }
             lower.contains("email") || lower.contains("e-mail") -> {
-                val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}").find(command)?.value.orEmpty()
+                val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(command)?.value.orEmpty()
                 val subject = command.substringAfter("subject", "Message from Erez AI").substringBefore("body").trim()
                     .ifBlank { "Message from Erez AI" }
                 if (ErezAiBrain.isReady()) {
