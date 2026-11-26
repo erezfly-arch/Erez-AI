@@ -70,38 +70,27 @@ object ErezAiBrain {
                     verifySha256(model)
                 }
                 onStatus("המודל אומת. טוען מנוע שפה וראייה לזיכרון…")
-                // Prefer GPU vision for speed, but fall back to CPU so supported
-                // devices without a compatible GPU delegate can still run fully offline.
-                val created = try {
-                    onStatus("מפעיל מודל על GPU…")
-                    createInitializedEngine(model, Backend.GPU(), Backend.GPU(), context)
+                // Treat engine initialization AND conversation creation as one backend attempt.
+                // Some GPU delegates initialize successfully but fail when creating the native
+                // conversation. In that case we must close the GPU engine and retry the full
+                // sequence on CPU rather than leaving the assistant unusable.
+                val runtime = try {
+                    onStatus("מפעיל מודל ושיחה על GPU…")
+                    createReadyRuntime(model, Backend.GPU(), Backend.GPU(), context)
                 } catch (gpuError: Throwable) {
-                    onStatus("הפעלת GPU נכשלה: " + describeError(gpuError) + ". מנסה CPU…")
+                    onStatus("הפעלת שיחה ב-GPU נכשלה: " + describeError(gpuError) + ". מנסה CPU…")
                     try {
-                        createInitializedEngine(model, Backend.CPU(), Backend.CPU(), context)
+                        createReadyRuntime(model, Backend.CPU(), Backend.CPU(), context)
                     } catch (cpuError: Throwable) {
                         throw IllegalStateException(
-                            "גם GPU וגם CPU נכשלו. GPU: " + describeError(gpuError) + " | CPU: " + describeError(cpuError),
+                            "יצירת שיחה נכשלה גם ב-GPU וגם ב-CPU. GPU: " +
+                                describeError(gpuError) + " | CPU: " + describeError(cpuError),
                             cpuError
                         )
                     }
                 }
-                engine = created
-                conversation = created.createConversation(
-                    ConversationConfig(
-                        systemInstruction = Contents.of(
-                            "אתה ארז, עוזר אישי חכם של המשתמש. דבר תמיד בעברית ישראלית טבעית, " +
-                            "בסגנון שיחה אנושי, ישיר, ברור ולא רובוטי. הבן הוראות בעברית מדוברת, " +
-                            "כולל סלנג ושגיאות תמלול קלות. ענה קצר ולעניין, בלי לחזור על השאלה. " +
-                            "אם המשתמש מבקש מידע על המסך, התבסס על התמונה והטקסט שסופקו; " +
-                            "אם אין תמונה או מידע מספיק, אמור זאת במפורש ואל תנחש. " +
-                            "אל תטען שביצעת פעולה שלא ביצעת. אם חסר פרט הכרחי שאל שאלה אחת. " +
-                            "לפני שליחת הודעות, פרסום, שיחות או שינויי יומן דרוש אישור מפורש."
-                        ),
-                        samplerConfig = SamplerConfig(topK = 20, topP = 0.90, temperature = 0.35),
-                        maxOutputToken = 256
-                    )
-                )
+                engine = runtime.first
+                conversation = runtime.second
                 ready = true
                 onStatus("מוח הבינה המקומי מוכן: שיחה, הבנת תמונות וניתוח מסך ללא מכסת שימוש.")
             } catch (e: Throwable) {
@@ -248,16 +237,15 @@ object ErezAiBrain {
         }
     }
 
-    private fun createInitializedEngine(
+    private fun createReadyRuntime(
         model: File, backend: Backend, visionBackend: Backend, context: Context
-    ): Engine {
+    ): Pair<Engine, Conversation> {
         val candidate = Engine(
             EngineConfig(
                 modelPath = model.absolutePath,
                 backend = backend,
                 visionBackend = visionBackend,
-                // This Qwen2-VL bundle has no audio tower. Do not request an audio backend;
-                // doing so can make native conversation creation fail for vision-only models.
+                // Qwen2-VL is a text-and-vision model; no audio tower is configured.
                 maxNumTokens = 2048,
                 maxNumImages = 1,
                 cacheDir = context.cacheDir.absolutePath
@@ -265,7 +253,22 @@ object ErezAiBrain {
         )
         try {
             candidate.initialize()
-            return candidate
+            val chat = candidate.createConversation(
+                ConversationConfig(
+                    systemInstruction = Contents.of(
+                        "אתה ארז, עוזר אישי חכם של המשתמש. דבר תמיד בעברית ישראלית טבעית, " +
+                            "בסגנון שיחה אנושי, ישיר, ברור ולא רובוטי. הבן הוראות בעברית מדוברת, " +
+                            "כולל סלנג ושגיאות תמלול קלות. ענה קצר ולעניין, בלי לחזור על השאלה. " +
+                            "אם המשתמש מבקש מידע על המסך, התבסס על התמונה והטקסט שסופקו; " +
+                            "אם אין תמונה או מידע מספיק, אמור זאת במפורש ואל תנחש. " +
+                            "אל תטען שביצעת פעולה שלא ביצעת. אם חסר פרט הכרחי שאל שאלה אחת. " +
+                            "לפני שליחת הודעות, פרסום, שיחות או שינויי יומן דרוש אישור מפורש."
+                    ),
+                    samplerConfig = SamplerConfig(topK = 20, topP = 0.90, temperature = 0.35),
+                    maxOutputToken = 256
+                )
+            )
+            return candidate to chat
         } catch (failure: Throwable) {
             try { candidate.close() } catch (_: Throwable) {}
             throw failure
