@@ -166,10 +166,10 @@ class ScreenCaptureService : Service() {
                     if (!hebrewOcrReady) hebrewOcrReady = hebrewOcr.initialize()
                     lastHebrewText = if (hebrewOcrReady) hebrewOcr.recognize(bitmap) else ""
                     val combined = buildString {
-                        if (lastText.isNotBlank()) append("Recognized screen text:\n").append(lastText)
+                        if (lastText.isNotBlank()) append(lastText)
                         if (lastHebrewText.isNotBlank()) {
                             if (isNotEmpty()) append("\n\n")
-                            append("Recognized Hebrew text:\n").append(lastHebrewText)
+                            append(lastHebrewText)
                         }
                     }.take(5000)
 
