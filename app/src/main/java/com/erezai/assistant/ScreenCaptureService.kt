@@ -14,6 +14,8 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
+import android.os.Handler
+import android.os.HandlerThread
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.tasks.Tasks
@@ -41,6 +43,7 @@ class ScreenCaptureService : Service() {
     private var projection: MediaProjection? = null
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
+    private var captureThread: HandlerThread? = null
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val processing = AtomicBoolean(false)
     private val recentFrames = ArrayDeque<File>()
@@ -91,7 +94,11 @@ class ScreenCaptureService : Service() {
             val captureHeight = (metrics.heightPixels.toFloat() * captureWidth / metrics.widthPixels)
                 .toInt().coerceAtLeast(1)
             reader = ImageReader.newInstance(captureWidth, captureHeight, PixelFormat.RGBA_8888, 2)
-            reader?.setOnImageAvailableListener({ source -> processLatestFrame(source) }, null)
+            captureThread = HandlerThread("ErezAI-ScreenCapture").apply { start() }
+            reader?.setOnImageAvailableListener(
+                { source -> processLatestFrame(source) },
+                Handler(captureThread!!.looper)
+            )
             display = projection?.createVirtualDisplay(
                 "ErezAI-screen", captureWidth, captureHeight, metrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader?.surface, null, null
@@ -205,6 +212,8 @@ class ScreenCaptureService : Service() {
         display?.release()
         reader?.setOnImageAvailableListener(null, null)
         reader?.close()
+        captureThread?.quitSafely()
+        captureThread = null
         projection?.stop()
         recognizer.close()
         try {
