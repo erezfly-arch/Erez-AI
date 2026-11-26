@@ -36,11 +36,14 @@ class ScreenCaptureService : Service() {
         const val EXTRA_SCREEN_IMAGE_PATH = "screen_image_path"
         const val EXTRA_SCREEN_FRAME_PATHS = "screen_frame_paths"
         const val ACTION_STOP = "com.erezai.assistant.screen.STOP"
+        const val EXTRA_ONE_SHOT = "screen_capture_one_shot"
         const val ACTION_SCREEN_STOPPED = "com.erezai.assistant.SCREEN_STOPPED"
         private const val FRAME_INTERVAL_MS = 4000L
     }
 
     private var projection: MediaProjection? = null
+    @Volatile private var oneShot = true
+    @Volatile private var oneShotCompleted = false
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
     private var captureThread: HandlerThread? = null
@@ -60,6 +63,7 @@ class ScreenCaptureService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        oneShot = intent?.getBooleanExtra(EXTRA_ONE_SHOT, true) ?: true
         val channel = "erez_screen_capture"
         if (Build.VERSION.SDK_INT >= 26) {
             val manager = getSystemService(NotificationManager::class.java)
@@ -202,13 +206,17 @@ class ScreenCaptureService : Service() {
                 } finally {
                     bitmap.recycle()
                     processing.set(false)
+                    if (oneShot) {
+                        oneShotCompleted = true
+                        stopSelf()
+                    }
                 }
             }
         }
     }
 
     override fun onDestroy() {
-        sendBroadcast(Intent(ACTION_SCREEN_STOPPED).setPackage(packageName))
+        if (!oneShotCompleted) sendBroadcast(Intent(ACTION_SCREEN_STOPPED).setPackage(packageName))
         display?.release()
         reader?.setOnImageAvailableListener(null, null)
         reader?.close()
