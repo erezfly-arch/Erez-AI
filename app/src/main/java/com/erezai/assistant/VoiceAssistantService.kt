@@ -111,10 +111,10 @@ class VoiceAssistantService : Service() {
     private fun buildNotification(status: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("ארז AI · האזנה מקומית")
+            .setContentTitle("Erez AI · Wake-word standby")
             .setContentText(status)
             .setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause, "עצור האזנה", stopPendingIntent())
+            .addAction(android.R.drawable.ic_media_pause, "Stop listening", stopPendingIntent())
             .build()
     }
 
