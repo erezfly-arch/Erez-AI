@@ -230,7 +230,7 @@ class VoiceAssistantService : Service() {
                                     updateNotification("Voice ignored: speaker did not match the enrolled profile.")
                                 }
                             }
-                        }               }
+                        }
                     }
                     utterance.clear()
                     speechStarted = false
