@@ -73,42 +73,17 @@ object ErezAiBrain {
                 // Prefer GPU vision for speed, but fall back to CPU so supported
                 // devices without a compatible GPU delegate can still run fully offline.
                 val created = try {
-                    onStatus("מפעיל האצת GPU למודל השפה והראייה…")
-                    Engine(
-                        EngineConfig(
-                            modelPath = model.absolutePath,
-                            backend = Backend.GPU(),
-                            visionBackend = Backend.GPU(),
-                            maxNumTokens = 4096,
-                            maxNumImages = 1,
-                            cacheDir = context.cacheDir.absolutePath
-                        )
-                    ).also { it.initialize() }
-                } catch (gpuError: Exception) {
-                    onStatus("האצת GPU מלאה אינה נתמכת. מנסה מעבד CPU עם האצת GPU לתמונות…")
+                    onStatus("מפעיל מודל על GPU…")
+                    createInitializedEngine(model, Backend.GPU(), Backend.GPU(), context)
+                } catch (gpuError: Throwable) {
+                    onStatus("הפעלת GPU נכשלה: " + describeError(gpuError) + ". מנסה CPU…")
                     try {
-                        Engine(
-                            EngineConfig(
-                                modelPath = model.absolutePath,
-                                backend = Backend.CPU(),
-                                visionBackend = Backend.GPU(),
-                                maxNumTokens = 4096,
-                                maxNumImages = 1,
-                                cacheDir = context.cacheDir.absolutePath
-                            )
-                        ).also { it.initialize() }
-                    } catch (hybridError: Exception) {
-                        onStatus("עובר למצב תאימות מלא על CPU…")
-                        Engine(
-                            EngineConfig(
-                                modelPath = model.absolutePath,
-                                backend = Backend.CPU(),
-                                visionBackend = Backend.CPU(),
-                                maxNumTokens = 4096,
-                                maxNumImages = 1,
-                                cacheDir = context.cacheDir.absolutePath
-                            )
-                        ).also { it.initialize() }
+                        createInitializedEngine(model, Backend.CPU(), Backend.CPU(), context)
+                    } catch (cpuError: Throwable) {
+                        throw IllegalStateException(
+                            "גם GPU וגם CPU נכשלו. GPU: " + describeError(gpuError) + " | CPU: " + describeError(cpuError),
+                            cpuError
+                        )
                     }
                 }
                 engine = created
@@ -129,9 +104,9 @@ object ErezAiBrain {
                 )
                 ready = true
                 onStatus("מוח הבינה המקומי מוכן: שיחה, הבנת תמונות וניתוח מסך ללא מכסת שימוש.")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 ready = false
-                onStatus("טעינת מוח הבינה נכשלה: ${e.message ?: "שגיאה לא ידועה"}")
+                onStatus("טעינת מוח הבינה נכשלה: " + describeError(e))
             }
         }
     }
@@ -183,7 +158,7 @@ object ErezAiBrain {
                         Contents.of(prompt)
                     }
                     target.sendMessageAsync(messages).collect { message ->
-                        onChunk(message.toString())
+                        onChunk(message.text)
                     }
                 }
                 onDone()
@@ -243,7 +218,7 @@ object ErezAiBrain {
                                     Content.Text("תאר את הפריים הזה בצורה מדויקת ותמציתית.")
                                 )
                             ).collect { message ->
-                                caption.append(message.toString())
+                                caption.append(message.text)
                             }
                         }
                         observations.append("פריים ").append(index + 1).append(": ")
@@ -273,6 +248,34 @@ object ErezAiBrain {
         }
     }
 
+    private fun createInitializedEngine(
+        model: File, backend: Backend, visionBackend: Backend, context: Context
+    ): Engine {
+        val candidate = Engine(
+            EngineConfig(
+                modelPath = model.absolutePath,
+                backend = backend,
+                visionBackend = visionBackend,
+                audioBackend = Backend.CPU(),
+                maxNumTokens = 2048,
+                maxNumImages = 1,
+                cacheDir = context.cacheDir.absolutePath
+            )
+        )
+        try {
+            candidate.initialize()
+            return candidate
+        } catch (failure: Throwable) {
+            try { candidate.close() } catch (_: Throwable) {}
+            throw failure
+        }
+    }
+
+    private fun describeError(error: Throwable): String {
+        var root = error
+        while (root.cause != null && root.cause !== root) root = root.cause!!
+        return root.javaClass.simpleName + ": " + (root.message ?: error.message ?: "ללא פירוט")
+    }
     private fun downloadModel(target: File, progress: (Long, Long) -> Unit) {
         target.parentFile?.mkdirs()
         val temp = File(target.parentFile, target.name + ".download")
@@ -295,7 +298,7 @@ object ErezAiBrain {
             val end = minOf(offset + chunkSize - 1L, MODEL_BYTES - 1L)
             val connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 30000
-                readTimeout = 180000
+                readTimeout = 600000
                 instanceFollowRedirects = true
                 setRequestProperty("User-Agent", "ErezAI-Android")
                 setRequestProperty("Accept-Encoding", "identity")
