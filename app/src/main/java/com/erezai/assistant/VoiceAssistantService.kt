@@ -199,38 +199,38 @@ class VoiceAssistantService : Service() {
                     if (utterance.size >= SAMPLE_RATE / 2) {
                         val transcript = asr.transcribe(utterance.toFloatArray())
                         if (transcript.isNotBlank()) {
-                            sendBroadcast(
-                                Intent(ACTION_TRANSCRIPT).setPackage(packageName)
-                                    .putExtra(EXTRA_TRANSCRIPT, transcript)
-                            )
                             val normalized = transcript.trim()
-                            // Normalize punctuation/quotes as well as spaces. Whisper can
-                            // emit Hebrew wake words with commas, question marks or quotes.
                             val lower = normalized.lowercase()
                                 .replace(Regex("[^\\p{L}\\p{N}\\s]+"), " ")
                                 .replace(Regex("\\s+"), " ")
                                 .trim()
-                            val wakePhrases = listOf("hey erez")
-                            val wakePrefix = wakePhrases.firstOrNull { lower == it || lower.startsWith("$it ") }.orEmpty()
-                            if (wakePrefix.isNotEmpty()) {
+                            val wakePrefix = if (lower == "hey erez" || lower.startsWith("hey erez ")) "hey erez" else ""
+                            val awaitingCommand = android.os.SystemClock.elapsedRealtime() < wakeArmedUntil
+                            if (wakePrefix.isNotBlank() || awaitingCommand) {
                                 val ownerMatched = identity.verify(utterance.toFloatArray())
                                 if (ownerMatched) {
-                                    val command = lower.removePrefix(wakePrefix).trim()
-                                    wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
-                                    if (command.isBlank()) {
-                                        sendBroadcast(Intent(ACTION_WAKE_HEARD).setPackage(packageName))
+                                    sendBroadcast(
+                                        Intent(ACTION_TRANSCRIPT).setPackage(packageName)
+                                            .putExtra(EXTRA_TRANSCRIPT, transcript)
+                                    )
+                                    if (wakePrefix.isNotBlank()) {
+                                        val command = lower.removePrefix(wakePrefix).trim()
+                                        wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
+                                        if (command.isBlank()) {
+                                            sendBroadcast(Intent(ACTION_WAKE_HEARD).setPackage(packageName))
+                                        } else {
+                                            sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, command))
+                                        }
                                     } else {
-                                        sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, command))
+                                        wakeArmedUntil = 0L
+                                        sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, normalized))
                                     }
                                 } else {
                                     wakeArmedUntil = 0L
-                                    updateNotification("Wake phrase ignored: speaker did not match the enrolled voice profile.")
+                                    updateNotification("Voice ignored: speaker did not match the enrolled profile.")
                                 }
-                            } else if (android.os.SystemClock.elapsedRealtime() < wakeArmedUntil) {
-                                wakeArmedUntil = 0L
-                                sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, normalized))
                             }
-                        }
+                        }               }
                     }
                     utterance.clear()
                     speechStarted = false
