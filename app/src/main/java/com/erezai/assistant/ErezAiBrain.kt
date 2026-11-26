@@ -45,7 +45,7 @@ object ErezAiBrain {
         executor.execute {
             try {
                 if (ready) {
-                    onStatus("מוח הבינה המקומי כבר מוכן.")
+                    onStatus("The local AI brain is already ready.")
                     return@execute
                 }
                 val model = File(context.filesDir, MODEL_NAME)
@@ -53,37 +53,37 @@ object ErezAiBrain {
                 val freeBytes = StatFs(context.filesDir.absolutePath).availableBytes
                 val remainingBytes = (MODEL_BYTES - partialModel.length()).coerceAtLeast(0L)
                 if ((!model.exists() || model.length() != MODEL_BYTES) && freeBytes < remainingBytes + 400_000_000L) {
-                    throw IllegalStateException("נדרש לפנות עוד אחסון פנוי כדי להשלים את התקנת מוח הבינה המקומי.")
+                    throw IllegalStateException("Free up additional storage to finish installing the local AI brain.")
                 }
                 if (!model.exists() || model.length() != MODEL_BYTES) {
-                    onStatus("מוריד מוח AI מקומי עם הבנת תמונות. גודל ההורדה כ־1.78GB. אין תשלום או מכסת שימוש.")
+                    onStatus("Downloading the local AI model with image understanding. Download size is about 1.78 GB. No API usage fees; performance depends on your device.")
                     var lastPercent = -1
                     downloadModel(model) { downloaded, total ->
                         val percent = if (total > 0) (downloaded * 100 / total).toInt() else -1
                         if (percent < 0 || percent != lastPercent) {
                             lastPercent = percent
-                            onStatus(if (percent >= 0) "מוריד מודל AI מקומי: $percent%" else "מוריד מודל AI: ${downloaded / 1_000_000} MB")
+                            onStatus(if (percent >= 0) "Downloading local AI model: $percent%" else "Downloading AI model: ${downloaded / 1_000_000} MB")
                         }
                     }
                 } else {
-                    onStatus("קובץ המודל כבר קיים. מאמת תקינות…")
+                    onStatus("The model file already exists. Verifying integrity…")
                     verifySha256(model)
                 }
-                onStatus("המודל אומת. טוען מנוע שפה וראייה לזיכרון…")
+                onStatus("Model verified. Loading the language and vision engine into memory…")
                 // Treat engine initialization AND conversation creation as one backend attempt.
                 // Some GPU delegates initialize successfully but fail when creating the native
                 // conversation. In that case we must close the GPU engine and retry the full
                 // sequence on CPU rather than leaving the assistant unusable.
                 val runtime = try {
-                    onStatus("מפעיל מודל ושיחה על GPU…")
+                    onStatus("Starting the model and conversation engine on GPU…")
                     createReadyRuntime(model, Backend.GPU(), Backend.GPU(), context)
                 } catch (gpuError: Throwable) {
-                    onStatus("הפעלת שיחה ב-GPU נכשלה: " + describeError(gpuError) + ". מנסה CPU…")
+                    onStatus("GPU initialization failed: " + describeError(gpuError) + ". Trying CPU…")
                     try {
                         createReadyRuntime(model, Backend.CPU(), Backend.CPU(), context)
                     } catch (cpuError: Throwable) {
                         throw IllegalStateException(
-                            "יצירת שיחה נכשלה גם ב-GPU וגם ב-CPU. GPU: " +
+                            "Conversation initialization failed on both GPU and CPU. GPU: " +
                                 describeError(gpuError) + " | CPU: " + describeError(cpuError),
                             cpuError
                         )
@@ -92,10 +92,10 @@ object ErezAiBrain {
                 engine = runtime.first
                 conversation = runtime.second
                 ready = true
-                onStatus("מוח הבינה המקומי מוכן: שיחה, הבנת תמונות וניתוח מסך ללא מכסת שימוש.")
+                onStatus("The local AI brain is ready: conversation, image understanding, and screen analysis. No API usage fees; device resources still apply.")
             } catch (e: Throwable) {
                 ready = false
-                onStatus("טעינת מוח הבינה נכשלה: " + describeError(e))
+                onStatus("The local AI brain failed to load: " + describeError(e))
             }
         }
     }
@@ -114,15 +114,15 @@ object ErezAiBrain {
         executor.execute {
             val activeEngine = engine
             if (!ready || activeEngine == null || conversation == null) {
-                onError("מוח הבינה המקומי עדיין לא נטען. יש להשלים את ההורדה הראשונית.")
+                onError("The local AI brain is not ready yet. Finish the initial download.")
                 return@execute
             }
             if (busy) {
-                onError("אני עדיין מסיים את התשובה הקודמת.")
+                onError("I am still finishing the previous response.")
                 return@execute
             }
             if (imageFile != null && !imageFile.exists()) {
-                onError("קובץ התמונה של המסך אינו זמין.")
+                onError("The screen image file is unavailable.")
                 return@execute
             }
             busy = true
@@ -151,7 +151,7 @@ object ErezAiBrain {
                 }
                 onDone()
             } catch (e: Exception) {
-                onError(e.message ?: "שגיאה בזמן יצירת תשובה")
+                onError(e.message ?: "Error while generating a response")
             } finally {
                 try { oneShot?.close() } catch (_: Exception) {}
                 busy = false
@@ -178,12 +178,12 @@ object ErezAiBrain {
                 return@execute
             }
             if (busy) {
-                onError("אני עדיין מסיים את התשובה הקודמת.")
+                onError("I am still finishing the previous response.")
                 return@execute
             }
             val usableFrames = framePaths.takeLast(6).map { File(it) }.filter { it.exists() }
             if (usableFrames.isEmpty()) {
-                onError("אין כרגע תמונות מסך זמינות לניתוח.")
+                onError("No screen images are currently available for analysis.")
                 return@execute
             }
             busy = true
@@ -229,7 +229,7 @@ object ErezAiBrain {
                 }
                 onDone()
             } catch (e: Exception) {
-                onError(e.message ?: "שגיאה בניתוח פריימים")
+                onError(e.message ?: "Error while analyzing frames")
             } finally {
                 busy = false
             }
@@ -271,7 +271,7 @@ object ErezAiBrain {
     private fun describeError(error: Throwable): String {
         var root = error
         while (root.cause != null && root.cause !== root) root = root.cause!!
-        return root.javaClass.simpleName + ": " + (root.message ?: error.message ?: "ללא פירוט")
+        return root.javaClass.simpleName + ": " + (root.message ?: error.message ?: "No details")
     }
     private fun downloadModel(target: File, progress: (Long, Long) -> Unit) {
         target.parentFile?.mkdirs()
@@ -284,7 +284,7 @@ object ErezAiBrain {
             if (sha256(temp).equals(MODEL_SHA256, ignoreCase = true)) {
                 if (target.exists()) target.delete()
                 if (temp.renameTo(target)) return
-                throw IllegalStateException("לא ניתן לשמור את קובץ המודל")
+                throw IllegalStateException("Could not save the model file")
             }
             temp.delete()
         }
@@ -313,7 +313,7 @@ object ErezAiBrain {
                     }
                     val declaredLength = connection.getHeaderFieldLong("Content-Length", -1L)
                     if (declaredLength > 0L && declaredLength != MODEL_BYTES) {
-                        throw IllegalStateException("שרת המודל החזיר קובץ בגודל לא צפוי ($declaredLength בתים).")
+                        throw IllegalStateException("The model server returned an unexpected file size ($declaredLength bytes).")
                     }
                     connection.inputStream.use { input ->
                         java.io.FileOutputStream(temp, false).buffered().use { output ->
@@ -324,7 +324,7 @@ object ErezAiBrain {
                                 if (count < 0) break
                                 received += count
                                 if (received > MODEL_BYTES) {
-                                    throw IllegalStateException("השרת שלח יותר נתונים מגודל המודל הצפוי.")
+                                    throw IllegalStateException("The server sent more data than the expected model size.")
                                 }
                                 output.write(buffer, 0, count)
                                 progress(received, MODEL_BYTES)
@@ -333,22 +333,22 @@ object ErezAiBrain {
                         }
                     }
                     if (temp.length() != MODEL_BYTES) {
-                        throw IllegalStateException("ההורדה נעצרה: התקבלו ${temp.length()} מתוך $MODEL_BYTES בתים. אפשר לנסות שוב.")
+                        throw IllegalStateException("Download interrupted: received ${temp.length()} of $MODEL_BYTES bytes. Please retry.")
                     }
                     break
                 }
                 if (code != HttpURLConnection.HTTP_PARTIAL) {
-                    throw IllegalStateException("שרת המודל החזיר שגיאת HTTP $code. ההורדה החלקית נשמרה.")
+                    throw IllegalStateException("The model server returned HTTP error $code. The partial download was preserved.")
                 }
                 val contentRange = connection.getHeaderField("Content-Range").orEmpty()
                 val match = Regex("bytes (\\d+)-(\\d+)/(\\d+)").matchEntire(contentRange)
-                    ?: throw IllegalStateException("שרת המודל החזיר טווח נתונים לא תקין: $contentRange")
+                    ?: throw IllegalStateException("The model server returned an invalid data range: $contentRange")
                 val rangeStart = match.groupValues[1].toLong()
                 val rangeEnd = match.groupValues[2].toLong()
                 val total = match.groupValues[3].toLong()
                 if (rangeStart != offset || rangeEnd < rangeStart || rangeEnd > end || total != MODEL_BYTES) {
                     temp.delete()
-                    throw IllegalStateException("שרת המודל החזיר טווח או גודל שאינם תואמים לגרסה המאומתת. ההורדה החלקית נמחקה.")
+                    throw IllegalStateException("The model server returned a range or size that does not match the verified version. The partial download was deleted.")
                 }
                 val expectedChunk = rangeEnd - rangeStart + 1L
                 var received = 0L
@@ -366,7 +366,7 @@ object ErezAiBrain {
                     }
                 }
                 if (received != expectedChunk) {
-                    throw IllegalStateException("החיבור נותק לאחר $received מתוך $expectedChunk בתים במקטע. אפשר להמשיך מאותה נקודה.")
+                    throw IllegalStateException("Connection interrupted after $received of $expectedChunk bytes in this chunk. You can resume from this point.")
                 }
             } catch (_: RetryFullDownloadException) {
                 // The next iteration starts from zero without a Range header.
@@ -377,15 +377,15 @@ object ErezAiBrain {
         }
 
         if (temp.length() != MODEL_BYTES) {
-            throw IllegalStateException("גודל קובץ המודל אינו תואם: ${temp.length()} מתוך $MODEL_BYTES bytes")
+            throw IllegalStateException("Model file size mismatch: ${temp.length()} of $MODEL_BYTES bytes")
         }
         val digest = sha256(temp)
         if (!digest.equals(MODEL_SHA256, ignoreCase = true)) {
             temp.delete()
-            throw IllegalStateException("בדיקת SHA-256 נכשלה; הקובץ נמחק כדי למנוע טעינת מודל פגום. יש לנסות הורדה מחדש.")
+            throw IllegalStateException("SHA-256 verification failed. The file was deleted to prevent loading a corrupt model. Please download again.")
         }
         if (target.exists()) target.delete()
-        if (!temp.renameTo(target)) throw IllegalStateException("לא ניתן לשמור את קובץ המודל")
+        if (!temp.renameTo(target)) throw IllegalStateException("Could not save the model file")
     }
 
     private class RetryFullDownloadException : Exception()
@@ -393,7 +393,7 @@ object ErezAiBrain {
     private fun verifySha256(file: File) {
         if (!sha256(file).equals(MODEL_SHA256, ignoreCase = true)) {
             file.delete()
-            throw IllegalStateException("קובץ מודל קיים אינו תקין ונמחק. יש להוריד מחדש.")
+            throw IllegalStateException("An existing model file was invalid and has been deleted. Download it again.")
         }
     }
 
