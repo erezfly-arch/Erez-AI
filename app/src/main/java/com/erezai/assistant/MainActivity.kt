@@ -394,13 +394,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             else -> {
                 if (ErezAiBrain.isReady()) {
                     val answer = StringBuilder()
+                    val previousLog = log.text.toString()
                     speak("קיבלתי. אני חושב על זה…")
                     ErezAiBrain.ask(
                         t,
                         { chunk ->
                             answer.append(chunk)
                             val partial = answer.toString()
-                            runOnUiThread { say(partial) }
+                            runOnUiThread { log.text = previousLog + "\nארז: " + partial }
                         },
                         {
                             runOnUiThread {
