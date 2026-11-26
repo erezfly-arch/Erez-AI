@@ -461,9 +461,16 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     ) {
         val answer = StringBuilder()
         speak("אני מנתח את התוכן…")
-        val onChunk: (String) -> Unit = { chunk -> answer.append(chunk) }
+        val onChunk: (String) -> Unit = { chunk ->
+            answer.append(chunk)
+            val partial = answer.toString()
+            Handler(Looper.getMainLooper()).post { statusText?.text = partial }
+        }
         val onDone: () -> Unit = {
-            Handler(Looper.getMainLooper()).post { speak(answer.toString().ifBlank { "לא התקבלה תשובה." }) }
+            Handler(Looper.getMainLooper()).post {
+                val reply = answer.toString().trim()
+                speak(reply.ifBlank { "המודל סיים בלי להחזיר תשובה. אפשר לנסות שוב." })
+            }
         }
         val onError: (String) -> Unit = { error ->
             Handler(Looper.getMainLooper()).post { speak(error) }
