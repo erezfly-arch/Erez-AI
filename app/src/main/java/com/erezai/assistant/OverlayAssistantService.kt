@@ -450,6 +450,11 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         latestText = ""
         latestScreenImagePath = ""
         latestScreenFramePaths = emptyList()
+        if (ScreenCaptureService.projectionActive) {
+            speak("Capturing the current screen…")
+            startService(Intent(this, ScreenCaptureService::class.java).setAction(ScreenCaptureService.ACTION_CAPTURE_ONCE))
+            return
+        }
         speak("Android needs your approval before I can view the screen. Please approve the screen-sharing prompt.")
         val intent = Intent(this, MainActivity::class.java)
             .putExtra(MainActivity.EXTRA_REQUEST_SCREEN_CAPTURE, true)
