@@ -58,7 +58,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 }
             } else if (intent?.action == VoiceAssistantService.ACTION_STATUS) {
                 latestVoiceStatus = intent.getStringExtra(VoiceAssistantService.EXTRA_STATUS).orEmpty()
-                voiceListening = latestVoiceStatus.contains("listening", ignoreCase = true) || latestVoiceStatus.contains("downloading", ignoreCase = true) || latestVoiceStatus.contains("preparing", ignoreCase = true) || latestVoiceStatus.contains("מקשיב") || latestVoiceStatus.contains("מוריד מודל") || latestVoiceStatus.contains("מכין זיהוי")
+                val statusLower = latestVoiceStatus.lowercase()
+                voiceListening = !statusLower.contains("stopped") && !statusLower.contains("error") && !latestVoiceStatus.contains("נעצרה") && (statusLower.contains("listening") || statusLower.contains("downloading") || statusLower.contains("preparing") || latestVoiceStatus.contains("מקשיב") || latestVoiceStatus.contains("מוריד מודל") || latestVoiceStatus.contains("מכין זיהוי"))
                 statusText?.text = latestVoiceStatus
                 voiceButton?.text = if (voiceListening) "⏹ Stop listening" else "🎙️ Talk to Erez"
             } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_STOPPED) {
