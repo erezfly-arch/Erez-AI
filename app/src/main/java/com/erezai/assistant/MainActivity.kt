@@ -93,9 +93,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this, this)
         buildUi()
-        // First-run setup is automatic: prepare the local AI model and request
-        // the minimum permissions in sequence instead of asking the user to find
-        // separate download/start buttons.
+        // First-run setup requests only the permissions needed for wake-word standby.
+        // The large reasoning model is loaded later, only when a command needs it.
         say("Erez AI is ready for Hey Erez. The larger reasoning model loads only when a task needs it.")
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
