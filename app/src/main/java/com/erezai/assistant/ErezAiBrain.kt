@@ -181,7 +181,7 @@ object ErezAiBrain {
                 onError("אני עדיין מסיים את התשובה הקודמת.")
                 return@execute
             }
-            val usableFrames = framePaths.takeLast(6).map { File(it) }.filter { it.exists() }
+            val usableFrames = framePaths.takeLast(2).map { File(it) }.filter { it.exists() }
             if (usableFrames.isEmpty()) {
                 onError("אין כרגע תמונות מסך זמינות לניתוח.")
                 return@execute
@@ -217,8 +217,8 @@ object ErezAiBrain {
                 }
                 val summaryPrompt = buildString {
                     append(prompt)
-                    append("\n\nאלה תיאורים של עד שישה פריימים עוקבים מהמסך, לפי סדר הזמן. ")
-                    append("השווה ביניהם, הסבר מה השתנה ומה כנראה מתרחש בסרטון. ")
+                    append("\n\nאלה תיאורים של עד שני פריימים שנדגמו מהמסך, לפי סדר הזמן. ")
+                    append("השווה ביניהם, הסבר מה השתנה ומה ניתן להסיק בזהירות על המתרחש בסרטון. ")
                     append("אל תמציא פרטים שאינם מופיעים בתיאורים.\n")
                     append(observations)
                 }
