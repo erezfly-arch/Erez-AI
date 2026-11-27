@@ -211,7 +211,7 @@ class VoiceAssistantService : Service() {
                     preRoll.clear()
                     speechStarted = false
                     silenceSamples = 0
-                    if (!commandMode) kws.reset(kwsStream)
+                    if (!commandMode) activeKws.reset(activeKwsStream)
                     continue
                 }
 
@@ -223,7 +223,7 @@ class VoiceAssistantService : Service() {
                         val result = activeKws.getResult(activeKwsStream)
                         if (result.keyword.isNotBlank()) {
                             wakeDetected = true
-                            kws.reset(kwsStream)
+                            activeKws.reset(activeKwsStream)
                             break
                         }
                     }
@@ -283,7 +283,7 @@ class VoiceAssistantService : Service() {
                                         commandAsr = null
                                         offlineSpeech = null
                                         commandMode = false
-                                        kws.reset(kwsStream)
+                                        activeKws.reset(activeKwsStream)
                                         updateNotification("Hey Erez standby is active · command received")
                                     } else {
                                         commandMode = true
@@ -296,12 +296,12 @@ class VoiceAssistantService : Service() {
                                     commandAsr = null
                                     offlineSpeech = null
                                     commandMode = false
-                                    kws.reset(kwsStream)
+                                    activeKws.reset(activeKwsStream)
                                     updateNotification("Command recognition failed: " + (e.message ?: "unknown error"))
                                 }
                             } else {
                                 updateNotification("Voice ignored: speaker did not match the enrolled profile.")
-                                kws.reset(kwsStream)
+                                activeKws.reset(activeKwsStream)
                             }
                         } else if (commandMode) {
                             val asr = commandAsr
@@ -326,7 +326,7 @@ class VoiceAssistantService : Service() {
                                     try { asr.close() } catch (_: Exception) {}
                                     commandAsr = null
                                     offlineSpeech = null
-                                    kws.reset(kwsStream)
+                                    activeKws.reset(activeKwsStream)
                                     updateNotification("Hey Erez standby is active · say Hey Erez")
                                 }
                             }
