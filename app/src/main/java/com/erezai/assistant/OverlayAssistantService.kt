@@ -58,7 +58,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 }
             } else if (intent?.action == VoiceAssistantService.ACTION_STATUS) {
                 latestVoiceStatus = intent.getStringExtra(VoiceAssistantService.EXTRA_STATUS).orEmpty()
-                voiceListening = latestVoiceStatus.contains("מקשיב") || latestVoiceStatus.contains("מוריד מודל") || latestVoiceStatus.contains("מכין זיהוי")
+                voiceListening = latestVoiceStatus.contains("listening", ignoreCase = true) || latestVoiceStatus.contains("downloading", ignoreCase = true) || latestVoiceStatus.contains("preparing", ignoreCase = true) || latestVoiceStatus.contains("מקשיב") || latestVoiceStatus.contains("מוריד מודל") || latestVoiceStatus.contains("מכין זיהוי")
                 statusText?.text = latestVoiceStatus
                 voiceButton?.text = if (voiceListening) "⏹ Stop listening" else "🎙️ Talk to Erez"
             } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_STOPPED) {
@@ -191,24 +191,24 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         if (voiceListening) {
             startService(Intent(this, VoiceAssistantService::class.java).setAction(VoiceAssistantService.ACTION_STOP))
             voiceListening = false
-            button.text = "🎙️ דבר עם ארז"
-            speak("ההאזנה נעצרה.")
+            button.text = "🎙️ Talk to Erez"
+            speak("Listening stopped.")
             return
         }
         if (Build.VERSION.SDK_INT >= 23 &&
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
-            speak("צריך לאשר גישה למיקרופון במסך הראשי של האפליקציה.")
+            speak("Please allow microphone access on the app home screen.")
             return
         }
         try {
             val intent = Intent(this, VoiceAssistantService::class.java)
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
             voiceListening = true
-            button.text = "⏹ עצור האזנה"
+            button.text = "⏹ Stop listening"
             speak("I'm listening. Say “Hey Erez” when you need me. I understand English and Hebrew.")
         } catch (e: Exception) {
-            speak("לא הצלחתי להפעיל את המיקרופון: ${e.message ?: "שגיאה"}")
+            speak("Could not start the microphone: ${e.message ?: "unknown error"}")
         }
     }
 
