@@ -34,7 +34,7 @@ jobs:
           python-version: "3.11"
       - name: Prepare compact English wake-word model
         run: |
-          python3 -m pip install --disable-pip-version-check --quiet sherpa-onnx sentencepiece click
+          python3 -m pip install --disable-pip-version-check --quiet sherpa-onnx sentencepiece click pypinyin
           curl -fL --retry 3 --retry-delay 2 \
             https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2 \
             -o /tmp/erez-kws.tar.bz2
