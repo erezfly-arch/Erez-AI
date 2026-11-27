@@ -35,7 +35,7 @@ class OfflineHebrewSpeech(private val context: Context) {
                 whisper = OfflineWhisperModelConfig(
                     encoder = encoder.absolutePath,
                     decoder = decoder.absolutePath,
-                    language = "auto",
+                    language = "",
                     task = "transcribe"
                 ),
                 tokens = tokens.absolutePath,
