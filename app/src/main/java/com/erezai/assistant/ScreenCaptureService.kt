@@ -188,7 +188,9 @@ class ScreenCaptureService : Service() {
                         synchronized(recentFrames) {
                             recentFrames.addLast(screenFile)
                             while (recentFrames.size > 2) recentFrames.removeFirst().delete()
-                            framePaths.add(screenFile.absolutePath)
+                            // Pass the complete retained window, oldest to newest, so
+                            // explicit video analysis can compare the two sampled frames.
+                            recentFrames.forEach { framePaths.add(it.absolutePath) }
                         }
                     }
                     if (combined.isNotBlank() || imageSaved) {
