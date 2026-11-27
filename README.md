@@ -9,11 +9,12 @@
 - Local/offline inference avoids paid API keys and per-request API fees. Device storage, RAM, CPU speed, battery, model licenses, and Android permission rules still apply.
 
 ## Current implementation
-The app uses a local Qwen2-VL 2B model through LiteRT-LM, MediaProjection for user-approved screen capture, a compact sherpa-onnx English keyword spotter for standby, Whisper Base multilingual loaded only after wake for commands, a local sherpa-onnx speaker-embedding model for owner checks, Android TextToSpeech with an offline Hebrew voice fallback, and an optional AccessibilityService for visible UI text.
+The app uses a local Qwen2-VL 2B model through LiteRT-LM, MediaProjection for user-approved screen capture, a compact sherpa-onnx English keyword spotter for standby, Whisper Base multilingual loaded only after wake for commands, a local sherpa-onnx speaker-embedding model for owner checks, Android TextToSpeech with automatic language selection and Android's Hebrew voice-data installer, and an optional AccessibilityService for visible UI text.
 
 ## Important gaps — not yet release-ready
 - Keyword spotting is lighter than continuous Whisper transcription, but microphone foreground service and CPU/battery use still need measurement on the target phone.
 - Speech is processed locally to detect the wake phrase; transcripts are exposed to the assistant only after the enrolled speaker matches. Speaker verification is probabilistic, not secure biometric authentication. It can reject the owner in noisy conditions or accept a sufficiently similar voice; never use it as the sole protection for payments, account access, or other high-risk actions.
+- Hebrew read-aloud uses an installed Android Hebrew TTS voice. If none is available, Erez opens Android's voice-data installer; a bundled offline Hebrew neural voice is not included.
 - WhatsApp voice-note recording and sending are not implemented yet. The app must not claim to send voice notes until the flow is built and tested against the installed WhatsApp version.
 - General phone actions are not universally supported. Each action needs a concrete Android implementation, the relevant permission, and a confirmation step where appropriate.
 - A successful CI build does not prove runtime reliability on the target Xiaomi/Android device. Real-device tests are still required before release.
