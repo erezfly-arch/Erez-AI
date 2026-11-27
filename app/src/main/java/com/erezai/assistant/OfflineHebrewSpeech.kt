@@ -95,10 +95,13 @@ class OfflineEnglishSpeech(private val context: Context) {
             connection.connect()
             val code = connection.responseCode
             if (code !in 200..299) throw IllegalStateException("Model download failed: HTTP $code")
+            val expectedBytes = connection.contentLengthLong
             connection.inputStream.use { input ->
                 temp.outputStream().buffered().use { output -> input.copyTo(output) }
             }
-            if (temp.length() < minimumBytes) throw IllegalStateException("Downloaded speech model is incomplete: ${target.name}")
+            if (temp.length() < minimumBytes || (expectedBytes > 0 && temp.length() != expectedBytes)) {
+                throw IllegalStateException("Downloaded speech model is incomplete or changed size: ${target.name}")
+            }
             if (target.exists()) target.delete()
             if (!temp.renameTo(target)) throw IllegalStateException("Cannot save speech model: ${target.name}")
         } finally {
