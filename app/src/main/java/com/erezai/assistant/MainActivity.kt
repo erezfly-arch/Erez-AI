@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var screenCaptureOneShot = true
     private var voiceEnrollmentLaunched = false
     private var pendingCommandAfterBrain = ""
+    private var speechPrefetchStarted = false
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -302,13 +303,28 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
             // Keep overlay startup lightweight; do not load heavy AI models here.
             startService(Intent(this, OverlayAssistantService::class.java))
-            say("The local listening service has started. After the speech model loads, say “Hey Erez” to activate a command. Stop listening from the notification.")
+            prefetchCommandSpeechModel()
+            say("Hey Erez standby is active. Say “Hey Erez” to activate a command. Stop listening from the notification.")
         } catch (_: Exception) {
             voiceStartupRequested = false
             say("Could not start background listening. Check microphone and notification permissions.")
         }
     }
 
+    private fun prefetchCommandSpeechModel() {
+        if (speechPrefetchStarted) return
+        speechPrefetchStarted = true
+        Thread {
+            val speech = OfflineEnglishSpeech(applicationContext)
+            try {
+                speech.prepareFiles()
+            } catch (_: Exception) {
+                speechPrefetchStarted = false
+            } finally {
+                speech.close()
+            }
+        }.start()
+    }
     private fun searchWeb(query: String) {
         say("Searching the web without an API key…")
         Thread {
