@@ -95,7 +95,7 @@ class VoiceAssistantService : Service() {
             running = true
             captureThread = thread(name = "ErezAI-Offline-Voice", start = true) { runOfflineListening() }
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun createNotificationChannel() {
