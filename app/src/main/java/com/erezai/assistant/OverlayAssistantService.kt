@@ -328,8 +328,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     val draft = StringBuilder()
                     speak("Drafting a comment based on the screen…")
                     ErezAiBrain.ask(
-                        "Write a concise, natural English comment appropriate for the post or video on screen. Understand the screen content even when it is in Hebrew. "
-                            "אל תמציא עובדות. החזר רק את נוסח התגובה. בקשת המשתמש: " + command +
+                        "Write a concise, natural English comment appropriate for the post or video on screen. Understand the screen content even when it is in Hebrew. " +
+                            "Do not invent facts. Return only the comment text. User request: " + command + החזר רק את נוסח התגובה. בקשת המשתמש: " + command +
                             "\\nתוכן המסך והדיבור שנקלט:\\n" + context,
                         { part -> draft.append(part) },
                         {
