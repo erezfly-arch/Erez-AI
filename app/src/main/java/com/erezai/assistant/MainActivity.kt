@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var screenConsentRequested = false
     private var screenCaptureOneShot = true
     private var voiceEnrollmentLaunched = false
+    private var pendingCommandAfterBrain = ""
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -234,6 +235,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     modelRetryButton.isEnabled = failed
                     modelRetryButton.text = if (failed) "Loading failed — retry" else if (ready) "AI engine ready" else "Loading AI engine…"
                 }
+                if (ready && pendingCommandAfterBrain.isNotBlank()) {
+                    val pending = pendingCommandAfterBrain
+                    pendingCommandAfterBrain = ""
+                    handle(pending)
+                }
             }
         }
     }
@@ -394,8 +400,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
             }
             t.contains("comment") || t.contains("reply") -> {
-                if (!ErezAiBrain.isReady()) speak("The local AI brain is not ready yet.")
-                else {
+                if (!ErezAiBrain.isReady()) {
+                    pendingCommandAfterBrain = t
+                    prepareBrain()
+                } else {
                     val draft = StringBuilder()
                     ErezAiBrain.ask(
                          "Write a concise, natural English comment for the visible post or video. Return only the comment draft. User request: " +
@@ -461,7 +469,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         },
                         { error -> runOnUiThread { speak("I ran into a problem creating the answer: $error") } }
                     )
-                } else speak("The AI engine is still loading or failed. Check the error message and tap Retry.")
+                } else {
+                    pendingCommandAfterBrain = t
+                    prepareBrain()
+                }
             }
         }
     }
