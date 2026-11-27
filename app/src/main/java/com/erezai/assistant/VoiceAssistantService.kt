@@ -31,8 +31,8 @@ import com.k2fsa.sherpa.onnx.OnlineStream
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 
 /**
- * Visible foreground microphone session with offline multilingual Whisper ASR.
- * The wake phrase is gated by a local speaker-verification profile.
+ * Visible foreground microphone session with compact local keyword spotting.
+ * Whisper is loaded only after the enrolled speaker says the wake phrase.
  */
 class VoiceAssistantService : Service() {
     companion object {
@@ -53,7 +53,6 @@ class VoiceAssistantService : Service() {
 
     @Volatile private var running = false
     @Volatile private var paused = false
-    @Volatile private var wakeArmedUntil = 0L
     private var captureThread: Thread? = null
     private var recorder: AudioRecord? = null
     private var offlineSpeech: OfflineEnglishSpeech? = null
@@ -162,8 +161,10 @@ class VoiceAssistantService : Service() {
                 keywordsThreshold = 0.25f,
                 numTrailingBlanks = 1
             )
-            kws = KeywordSpotter(assetManager = assets, config = kwsConfig)
-            kwsStream = kws.createStream()
+            val activeKws = KeywordSpotter(assetManager = assets, config = kwsConfig)
+            kws = activeKws
+            val activeKwsStream = activeKws.createStream()
+            kwsStream = activeKwsStream
             updateNotification("Hey Erez standby is active · compact local keyword detector")
 
             val minBytes = AudioRecord.getMinBufferSize(
@@ -201,7 +202,7 @@ class VoiceAssistantService : Service() {
                     commandAsr = null
                     offlineSpeech = null
                     wakeDetected = false
-                    kws.reset(kwsStream)
+                    activeKws.reset(activeKwsStream)
                     updateNotification("Hey Erez standby is active · say Hey Erez")
                 }
 
@@ -216,10 +217,10 @@ class VoiceAssistantService : Service() {
 
                 val samples = FloatArray(count) { shortBuffer[it] / 32768.0f }
                 if (!commandMode) {
-                    kwsStream.acceptWaveform(samples, SAMPLE_RATE)
-                    while (kws.isReady(kwsStream)) {
-                        kws.decode(kwsStream)
-                        val result = kws.getResult(kwsStream)
+                    activeKwsStream.acceptWaveform(samples, SAMPLE_RATE)
+                    while (activeKws.isReady(activeKwsStream)) {
+                        activeKws.decode(activeKwsStream)
+                        val result = activeKws.getResult(activeKwsStream)
                         if (result.keyword.isNotBlank()) {
                             wakeDetected = true
                             kws.reset(kwsStream)
