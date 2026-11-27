@@ -152,12 +152,11 @@ class VoiceAssistantService : Service() {
                     tokens = "erez-kws/tokens.txt",
                     numThreads = 1,
                     debug = false,
-                    provider = "cpu",
-                    modelType = "zipformer2"
+                    provider = "cpu"
                 ),
                 maxActivePaths = 4,
                 keywordsFile = "erez-kws/hey_erez_keywords.txt",
-                keywordsScore = 2.0f,
+                keywordsScore = 1.0f,
                 keywordsThreshold = 0.25f,
                 numTrailingBlanks = 1
             )
