@@ -329,8 +329,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     speak("Drafting a comment based on the screen…")
                     ErezAiBrain.ask(
                         "Write a concise, natural English comment appropriate for the post or video on screen. Understand the screen content even when it is in Hebrew. " +
-                            "Do not invent facts. Return only the comment text. User request: " + command + החזר רק את נוסח התגובה. בקשת המשתמש: " + command +
-                            "\\nתוכן המסך והדיבור שנקלט:\\n" + context,
+                            "Do not invent facts. Return only the comment text. User request: " + command +
+                            "\\nVisible screen text and recognized speech:\\n" + context,
                         { part -> draft.append(part) },
                         {
                             Handler(Looper.getMainLooper()).post {
