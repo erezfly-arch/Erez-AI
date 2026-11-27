@@ -19,16 +19,25 @@ class OfflineEnglishSpeech(private val context: Context) {
     private var recognizer: OfflineRecognizer? = null
     @Volatile private var activeConnection: HttpURLConnection? = null
 
+    fun prepareFiles(onStatus: (String) -> Unit = {}) {
+        synchronized(DOWNLOAD_LOCK) {
+            modelDir.mkdirs()
+            val encoder = File(modelDir, "base-encoder.int8.onnx")
+            val decoder = File(modelDir, "base-decoder.int8.onnx")
+            val tokens = File(modelDir, "base-tokens.txt")
+            ensureFile(encoder, ENCODER_URL, 20_000_000L) { onStatus("Downloading the offline speech model: encoder…") }
+            ensureFile(decoder, DECODER_URL, 80_000_000L) { onStatus("Downloading the offline speech model: decoder…") }
+            ensureFile(tokens, TOKENS_URL, 100_000L) { onStatus("Downloading speech tokens…") }
+        }
+    }
+
+    @Synchronized
     fun initialize(onStatus: (String) -> Unit) {
         if (recognizer != null) return
-        modelDir.mkdirs()
+        prepareFiles(onStatus)
         val encoder = File(modelDir, "base-encoder.int8.onnx")
         val decoder = File(modelDir, "base-decoder.int8.onnx")
         val tokens = File(modelDir, "base-tokens.txt")
-        ensureFile(encoder, ENCODER_URL, 20_000_000L) { onStatus("Downloading the offline speech model: encoder…") }
-        ensureFile(decoder, DECODER_URL, 80_000_000L) { onStatus("Downloading the offline speech model: decoder…") }
-        ensureFile(tokens, TOKENS_URL, 100_000L) { onStatus("Downloading speech tokens…") }
-
         val config = OfflineRecognizerConfig(
             featConfig = FeatureConfig(sampleRate = 16000, featureDim = 80),
             modelConfig = OfflineModelConfig(
@@ -100,6 +109,7 @@ class OfflineEnglishSpeech(private val context: Context) {
     }
 
     companion object {
+        private val DOWNLOAD_LOCK = Any()
         private const val BASE =
             "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main/"
         private const val ENCODER_URL = BASE + "base-encoder.int8.onnx"
