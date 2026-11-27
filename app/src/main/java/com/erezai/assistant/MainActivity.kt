@@ -95,8 +95,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         // First-run setup is automatic: prepare the local AI model and request
         // the minimum permissions in sequence instead of asking the user to find
         // separate download/start buttons.
-        say("Preparing Erez AI. The initial local model download is large and requires Wi-Fi and free storage.")
-        prepareBrain()
+        say("Erez AI is ready for Hey Erez. The larger reasoning model loads only when a task needs it.")
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
@@ -196,7 +195,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         root.addView(subtitle)
         root.addView(command)
         root.addView(TextView(this).apply {
-            text = "Model installation and setup run automatically in the background."
+            text = "Wake-word detection and speaker verification run locally. The larger reasoning model loads only when needed."
             setTextColor(0xFFB7C4D8.toInt())
             textSize = 14f
             setPadding(0, 12, 0, 12)
