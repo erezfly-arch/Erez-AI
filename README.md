@@ -4,7 +4,7 @@
 - Wake phrase: **Hey Erez**. A first-run 9-second voice enrollment creates a local speaker profile; the wake phrase is checked against it before the assistant responds.
 - English-first commands, reasoning, status messages, and assistant replies.
 - Multilingual speech and screen understanding: Hebrew and English source text must be preserved; reading Hebrew aloud uses a Hebrew Android TTS voice when installed.
-- Screen projection is requested only when the user asks for screen/image understanding. A single-frame capture is the default and stops automatically after OCR to limit memory and battery use. Accessibility access is optional and requires the user to enable the Android service.
+- Screen projection is requested only when the user asks for screen/image understanding. A single-frame capture is the default; OCR and bitmap processing stop after each request. The user-approved projection session stays available until stopped from its notification, avoiding repeated consent prompts while idle processing remains disabled. Accessibility access is optional and requires the user to enable the Android service.
 - WhatsApp replies are intended to be voice notes only. Typed WhatsApp sending has been removed from the current command flow.
 - Local/offline inference avoids paid API keys and per-request API fees. Device storage, RAM, CPU speed, battery, model licenses, and Android permission rules still apply.
 
