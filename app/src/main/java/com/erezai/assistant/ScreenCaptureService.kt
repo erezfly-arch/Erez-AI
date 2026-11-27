@@ -42,7 +42,7 @@ class ScreenCaptureService : Service() {
         const val ACTION_SCREEN_STOPPED = "com.erezai.assistant.SCREEN_STOPPED"
         const val ACTION_SCREEN_CAPTURE_DONE = "com.erezai.assistant.SCREEN_CAPTURE_DONE"
         const val ACTION_SCREEN_CAPTURE_FAILED = "com.erezai.assistant.SCREEN_CAPTURE_FAILED"
-        private const val FRAME_INTERVAL_MS = 4000L
+        private const val FRAME_INTERVAL_MS = 1000L
     }
 
     private var projection: MediaProjection? = null
