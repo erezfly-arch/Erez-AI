@@ -244,7 +244,9 @@ class VoiceAssistantService : Service() {
                     for (sample in samples) preRoll.addLast(sample)
                     while (preRoll.size > SAMPLE_RATE / 3) preRoll.removeFirst()
                 }
-                if (speechStarted) utterance.addAll(samples)
+                if (speechStarted) {
+                    for (sample in samples) utterance.add(sample)
+                }
 
                 val reachedSilence = silenceSamples >= SAMPLE_RATE * 9 / 10
                 val reachedMaxUtterance = utterance.size >= SAMPLE_RATE * 14
