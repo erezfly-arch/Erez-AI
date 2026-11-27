@@ -9,10 +9,10 @@
 - Local/offline inference avoids paid API keys and per-request API fees. Device storage, RAM, CPU speed, battery, model licenses, and Android permission rules still apply.
 
 ## Current implementation
-The app uses a local Qwen2-VL 2B model through LiteRT-LM, MediaProjection for user-approved screen capture, sherpa-onnx Whisper Base multilingual for offline speech recognition, a local sherpa-onnx speaker-embedding model for wake-word speaker checks, Android TextToSpeech with an offline Hebrew voice fallback, and an optional AccessibilityService for visible UI text.
+The app uses a local Qwen2-VL 2B model through LiteRT-LM, MediaProjection for user-approved screen capture, a compact sherpa-onnx English keyword spotter for standby, Whisper Base multilingual loaded only after wake for commands, a local sherpa-onnx speaker-embedding model for owner checks, Android TextToSpeech with an offline Hebrew voice fallback, and an optional AccessibilityService for visible UI text.
 
 ## Important gaps — not yet release-ready
-- Wake-word standby currently uses offline Whisper transcription to detect the phrase. It is not yet a dedicated low-power keyword-spotting engine, so microphone foreground service and CPU/battery use must be measured on the target phone.
+- Keyword spotting is lighter than continuous Whisper transcription, but microphone foreground service and CPU/battery use still need measurement on the target phone.
 - Speech is processed locally to detect the wake phrase; transcripts are exposed to the assistant only after the enrolled speaker matches. Speaker verification is probabilistic, not secure biometric authentication. It can reject the owner in noisy conditions or accept a sufficiently similar voice; never use it as the sole protection for payments, account access, or other high-risk actions.
 - WhatsApp voice-note recording and sending are not implemented yet. The app must not claim to send voice notes until the flow is built and tested against the installed WhatsApp version.
 - General phone actions are not universally supported. Each action needs a concrete Android implementation, the relevant permission, and a confirmation step where appropriate.
