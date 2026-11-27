@@ -48,6 +48,8 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     @Volatile private var offlineHebrewTts: OfflineHebrewTts? = null
     @Volatile private var offlineHebrewLoading = false
     @Volatile private var pendingHebrewSpeech = ""
+    private var brainPreparing = false
+    private val pendingBrainActions = mutableListOf<() -> Unit>()
     private val textReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             if (intent?.action == VoiceAssistantService.ACTION_WAKE_HEARD) {
@@ -547,11 +549,40 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         startActivity(intent)
     }
 
+    private fun withBrain(action: () -> Unit) {
+        if (ErezAiBrain.isReady()) {
+            action()
+            return
+        }
+        pendingBrainActions.add(action)
+        if (brainPreparing) return
+        brainPreparing = true
+        speak("Loading the local reasoning model. The first load can take a while.")
+        ErezAiBrain.prepare(this) { message ->
+            Handler(Looper.getMainLooper()).post {
+                statusText?.text = message
+                if (message.startsWith("The local AI brain is ready")) {
+                    brainPreparing = false
+                    val actions = pendingBrainActions.toList()
+                    pendingBrainActions.clear()
+                    actions.forEach { it() }
+                } else if (message.startsWith("The local AI brain failed to load")) {
+                    brainPreparing = false
+                    pendingBrainActions.clear()
+                    speak(message)
+                }
+            }
+        }
+    }
     private fun askAi(
         prompt: String,
         imageFile: java.io.File? = null,
         framePaths: List<String> = emptyList()
     ) {
+        if (!ErezAiBrain.isReady()) {
+            withBrain { askAi(prompt, imageFile, framePaths) }
+            return
+        }
         val answer = StringBuilder()
         speak("Analyzing the content…")
         val onChunk: (String) -> Unit = { chunk ->
