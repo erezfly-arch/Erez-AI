@@ -380,15 +380,11 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     // Hebrew TTS voice rather than translated into English.
                     speak(latestText.take(3500))
                 } else if (latestScreenImagePath.isNotBlank()) {
-                    if (ErezAiBrain.isReady()) {
-                        val snapshot = java.io.File(latestScreenImagePath)
-                        askAi(
-                            "Transcribe all readable text visible in this image exactly as written. Preserve every original language and script, especially Hebrew. Do not translate, summarize, or transliterate. Return only the transcription.",
-                            snapshot
-                        )
-                    } else {
-                        speak("The local AI brain is not ready to read this image yet.")
-                    }
+                    val snapshot = java.io.File(latestScreenImagePath)
+                    askAi(
+                        "Transcribe all readable text visible in this image exactly as written. Preserve every original language and script, especially Hebrew. Do not translate, summarize, or transliterate. Return only the transcription.",
+                        snapshot
+                    )
                 } else {
                     pendingScreenCommand = command
                     requestScreenCapture()
@@ -399,20 +395,18 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 if (latestText.isBlank() && latestScreenImagePath.isBlank()) {
                     pendingScreenCommand = command
                     requestScreenCapture()
-                } else if (ErezAiBrain.isReady()) {
+                } else {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
                     askAi(
                         "Describe in concise, natural English what is visible on the phone screen. You may quote visible Hebrew text exactly in Hebrew; do not translate quoted text unless asked.\n" +
                             latestText.take(5000),
                         snapshot
                     )
-                } else {
-                    speak("The local AI brain is not ready yet.")
                 }
             }
             lower.contains("comment") || lower.contains("write a reply") || lower.contains("draft a reply") -> {
                 if (!ErezAiBrain.isReady()) {
-                    speak("The local AI brain is not ready yet.")
+                    withBrain { runCommand(command) }
                 } else {
                     val context = (latestText + "\n" + latestAudioText).take(7000)
                     val draft = StringBuilder()
@@ -446,7 +440,9 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(command)?.value.orEmpty()
                 val subject = command.substringAfter("subject", "Message from Erez AI").substringBefore("body").trim()
                     .ifBlank { "Message from Erez AI" }
-                if (ErezAiBrain.isReady()) {
+                if (!ErezAiBrain.isReady()) {
+                    withBrain { runCommand(command) }
+                } else {
                     val draft = StringBuilder()
                     ErezAiBrain.ask(
                         "Write an email body in natural English based on this request. Return only the body. Request: " + command,
@@ -456,9 +452,6 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                         } },
                         { error -> Handler(Looper.getMainLooper()).post { speak(error) } }
                     )
-                } else {
-                    val body = command.substringAfter("body", command).trim()
-                    confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, body, recipient = recipient)
                 }
             }
             lower.contains("remind me") || lower.contains("calendar") || lower.contains("reminder") -> {
@@ -470,13 +463,9 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 searchWeb(query.ifBlank { command })
             }
             else -> {
-                if (ErezAiBrain.isReady()) {
-                    val context = if (latestText.isBlank()) "" else
-                        "\n\nVisible phone screen text (may be partial; preserve source language):\n" + latestText.take(5000)
-                    askAi("Answer in natural English unless I explicitly ask you to read source text aloud in its original language. " + command + context)
-                } else {
-                    speak("The local AI brain is still loading. Please wait until setup finishes.")
-                }
+                val context = if (latestText.isBlank()) "" else
+                    "\n\nVisible phone screen text (may be partial; preserve source language):\n" + latestText.take(5000)
+                askAi("Answer in natural English unless I explicitly ask you to read source text aloud in its original language. " + command + context)
             }
         }
     }
