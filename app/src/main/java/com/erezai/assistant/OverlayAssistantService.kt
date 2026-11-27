@@ -45,9 +45,6 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     @Volatile private var ttsReady = false
     @Volatile private var pendingSpeech = ""
-    @Volatile private var offlineHebrewTts: OfflineHebrewTts? = null
-    @Volatile private var offlineHebrewLoading = false
-    @Volatile private var pendingHebrewSpeech = ""
     private var brainPreparing = false
     private val pendingBrainActions = mutableListOf<() -> Unit>()
     private val textReceiver = object : BroadcastReceiver() {
@@ -154,14 +151,14 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         statusText?.text = message
         val containsHebrew = message.any { it.code in 0x0590..0x05FF }
         if (tts == null || !ttsReady) {
-            if (containsHebrew) speakHebrewOffline(message) else pendingSpeech = message
+            if (containsHebrew) requestHebrewVoiceData() else pendingSpeech = message
             return
         }
         val requestedLocale = if (containsHebrew) Locale("he", "IL") else Locale.US
         val languageResult = tts?.setLanguage(requestedLocale) ?: TextToSpeech.LANG_NOT_SUPPORTED
         if (languageResult < TextToSpeech.LANG_AVAILABLE) {
             if (containsHebrew) {
-                speakHebrewOffline(message)
+                requestHebrewVoiceData()
             } else {
                 statusText?.text = "English speech data is not installed on this device."
                 voiceControl(VoiceAssistantService.ACTION_RESUME)
@@ -173,35 +170,14 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         if (result == TextToSpeech.ERROR) voiceControl(VoiceAssistantService.ACTION_RESUME)
     }
 
-    private fun speakHebrewOffline(message: String) {
-        pendingHebrewSpeech = message
-        voiceControl(VoiceAssistantService.ACTION_PAUSE)
-        if (offlineHebrewTts != null) {
-            Thread {
-                try { offlineHebrewTts?.speak(message) }
-                catch (e: Exception) { Handler(Looper.getMainLooper()).post { statusText?.text = "Hebrew speech failed: ${e.message ?: "unknown error"}" } }
-                finally { voiceControl(VoiceAssistantService.ACTION_RESUME) }
-            }.start()
-            return
+    private fun requestHebrewVoiceData() {
+        statusText?.text = "Hebrew voice data is missing. Opening Android's voice-data installer…"
+        voiceControl(VoiceAssistantService.ACTION_RESUME)
+        try {
+            startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) {
+            statusText?.text = "Install a Hebrew voice in Android text-to-speech settings, then ask me to read the text again."
         }
-        if (offlineHebrewLoading) return
-        offlineHebrewLoading = true
-        statusText?.text = "Preparing the offline Hebrew voice for the first time…"
-        Thread {
-            try {
-                val engine = OfflineHebrewTts(applicationContext)
-                engine.initialize { update -> Handler(Looper.getMainLooper()).post { statusText?.text = update } }
-                offlineHebrewTts = engine
-                val textToSpeak = pendingHebrewSpeech
-                pendingHebrewSpeech = ""
-                if (textToSpeak.isNotBlank()) engine.speak(textToSpeak)
-            } catch (e: Exception) {
-                Handler(Looper.getMainLooper()).post { statusText?.text = "Offline Hebrew voice could not start: ${e.message ?: "unknown error"}" }
-            } finally {
-                offlineHebrewLoading = false
-                voiceControl(VoiceAssistantService.ACTION_RESUME)
-            }
-        }.start()
     }
     private fun layoutParams(width: Int, height: Int, gravity: Int = Gravity.TOP or Gravity.END, focusable: Boolean = false): WindowManager.LayoutParams {
         val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
@@ -601,8 +577,6 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         tts?.stop()
         tts?.shutdown()
         tts = null
-        offlineHebrewTts?.close()
-        offlineHebrewTts = null
         bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) {} }
         bubble = null
         super.onDestroy()
