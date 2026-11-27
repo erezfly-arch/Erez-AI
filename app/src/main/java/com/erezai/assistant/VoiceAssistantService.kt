@@ -23,6 +23,12 @@ import java.util.ArrayList
 import java.util.ArrayDeque
 import kotlin.concurrent.thread
 import kotlin.math.sqrt
+import com.k2fsa.sherpa.onnx.FeatureConfig
+import com.k2fsa.sherpa.onnx.KeywordSpotter
+import com.k2fsa.sherpa.onnx.KeywordSpotterConfig
+import com.k2fsa.sherpa.onnx.OnlineModelConfig
+import com.k2fsa.sherpa.onnx.OnlineStream
+import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 
 /**
  * Visible foreground microphone session with offline multilingual Whisper ASR.
@@ -124,15 +130,41 @@ class VoiceAssistantService : Service() {
     }
 
     private fun runOfflineListening() {
-        val asr = OfflineEnglishSpeech(applicationContext)
         val identity = VoiceIdentity(applicationContext)
-        offlineSpeech = asr
+        var kws: KeywordSpotter? = null
+        var kwsStream: OnlineStream? = null
+        var commandAsr: OfflineEnglishSpeech? = null
+        offlineSpeech = null
+        var commandMode = false
+        var commandDeadline = 0L
+        var wakeDetected = false
         try {
-            updateNotification("Preparing offline multilingual speech recognition…")
-            asr.initialize { message -> updateNotification(message) }
             identity.initialize { message -> updateNotification(message) }
             if (!identity.isEnrolled) throw IllegalStateException("No owner voice profile is enrolled. Open Erez AI and set up your voice profile.")
-            updateNotification("Hey Erez standby is active · speaker verification enabled")
+
+            val kwsConfig = KeywordSpotterConfig(
+                featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
+                modelConfig = OnlineModelConfig(
+                    transducer = OnlineTransducerModelConfig(
+                        encoder = "erez-kws/encoder.onnx",
+                        decoder = "erez-kws/decoder.onnx",
+                        joiner = "erez-kws/joiner.onnx"
+                    ),
+                    tokens = "erez-kws/tokens.txt",
+                    numThreads = 1,
+                    debug = false,
+                    provider = "cpu",
+                    modelType = "zipformer2"
+                ),
+                maxActivePaths = 4,
+                keywordsFile = "erez-kws/hey_erez_keywords.txt",
+                keywordsScore = 2.0f,
+                keywordsThreshold = 0.25f,
+                numTrailingBlanks = 1
+            )
+            kws = KeywordSpotter(assetManager = assets, config = kwsConfig)
+            kwsStream = kws.createStream()
+            updateNotification("Hey Erez standby is active · compact local keyword detector")
 
             val minBytes = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
@@ -152,30 +184,53 @@ class VoiceAssistantService : Service() {
             recorder = audio
             audio.startRecording()
 
-            val shortBuffer = ShortArray(1600) // 100 ms
+            val shortBuffer = ShortArray(1600)
             val utterance = ArrayList<Float>(SAMPLE_RATE * 10)
             val preRoll = ArrayDeque<Float>(SAMPLE_RATE / 3)
             var speechStarted = false
             var silenceSamples = 0
+
             while (running) {
                 val count = audio.read(shortBuffer, 0, shortBuffer.size)
                 if (count <= 0) continue
+                val now = android.os.SystemClock.elapsedRealtime()
+
+                if (commandMode && now >= commandDeadline) {
+                    commandMode = false
+                    try { commandAsr?.close() } catch (_: Exception) {}
+                    commandAsr = null
+                    offlineSpeech = null
+                    wakeDetected = false
+                    kws.reset(kwsStream)
+                    updateNotification("Hey Erez standby is active · say Hey Erez")
+                }
+
                 if (paused) {
                     utterance.clear()
                     preRoll.clear()
                     speechStarted = false
                     silenceSamples = 0
+                    if (!commandMode) kws.reset(kwsStream)
                     continue
                 }
 
-                var energy = 0.0
-                for (i in 0 until count) {
-                    val sample = shortBuffer[i] / 32768.0f
-                    energy += sample * sample
+                val samples = FloatArray(count) { shortBuffer[it] / 32768.0f }
+                if (!commandMode) {
+                    kwsStream.acceptWaveform(samples, SAMPLE_RATE)
+                    while (kws.isReady(kwsStream)) {
+                        kws.decode(kwsStream)
+                        val result = kws.getResult(kwsStream)
+                        if (result.keyword.isNotBlank()) {
+                            wakeDetected = true
+                            kws.reset(kwsStream)
+                            break
+                        }
+                    }
                 }
+
+                var energy = 0.0
+                for (sample in samples) energy += sample * sample
                 val rms = sqrt(energy / count).toFloat()
-                // A short
-                // pre-roll preserves the wake phrase first syllable.
                 if (rms >= 0.0038f) {
                     if (!speechStarted) {
                         utterance.addAll(preRoll)
@@ -186,48 +241,92 @@ class VoiceAssistantService : Service() {
                 } else if (speechStarted) {
                     silenceSamples += count
                 } else {
-                    for (i in 0 until count) preRoll.addLast(shortBuffer[i] / 32768.0f)
+                    for (sample in samples) preRoll.addLast(sample)
                     while (preRoll.size > SAMPLE_RATE / 3) preRoll.removeFirst()
                 }
-                if (speechStarted) {
-                    for (i in 0 until count) utterance.add(shortBuffer[i] / 32768.0f)
-                }
+                if (speechStarted) utterance.addAll(samples)
 
                 val reachedSilence = silenceSamples >= SAMPLE_RATE * 9 / 10
                 val reachedMaxUtterance = utterance.size >= SAMPLE_RATE * 14
                 if (speechStarted && (reachedSilence || reachedMaxUtterance)) {
-                    if (utterance.size >= SAMPLE_RATE / 2) {
-                        val transcript = asr.transcribe(utterance.toFloatArray())
-                        if (transcript.isNotBlank()) {
-                            val normalized = transcript.trim()
-                            val lower = normalized.lowercase()
-                                .replace(Regex("[^\\p{L}\\p{N}\\s]+"), " ")
-                                .replace(Regex("\\s+"), " ")
-                                .trim()
-                            val wakePrefix = if (lower == "hey erez" || lower.startsWith("hey erez ")) "hey erez" else ""
-                            val awaitingCommand = android.os.SystemClock.elapsedRealtime() < wakeArmedUntil
-                            if (wakePrefix.isNotBlank() || awaitingCommand) {
-                                val ownerMatched = identity.verify(utterance.toFloatArray())
-                                if (ownerMatched) {
-                                    sendBroadcast(
-                                        Intent(ACTION_TRANSCRIPT).setPackage(packageName)
-                                            .putExtra(EXTRA_TRANSCRIPT, transcript)
-                                    )
-                                    if (wakePrefix.isNotBlank()) {
-                                        val command = lower.removePrefix(wakePrefix).trim()
-                                        wakeArmedUntil = android.os.SystemClock.elapsedRealtime() + 15_000L
-                                        if (command.isBlank()) {
-                                            sendBroadcast(Intent(ACTION_WAKE_HEARD).setPackage(packageName))
-                                        } else {
-                                            sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, command))
-                                        }
-                                    } else {
-                                        wakeArmedUntil = 0L
-                                        sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, normalized))
+                    if (utterance.size >= SAMPLE_RATE / 2 && (wakeDetected || commandMode)) {
+                        val audioSample = utterance.toFloatArray()
+                        if (wakeDetected && !commandMode) {
+                            wakeDetected = false
+                            val ownerMatched = identity.verify(audioSample)
+                            if (ownerMatched) {
+                                updateNotification("Voice verified. Preparing command recognition…")
+                                val asr = OfflineEnglishSpeech(applicationContext)
+                                try {
+                                    asr.initialize { message -> updateNotification(message) }
+                                    commandAsr = asr
+                                    offlineSpeech = asr
+                                    val transcript = asr.transcribe(audioSample)
+                                    val normalized = transcript.trim()
+                                    val lower = normalized.lowercase()
+                                        .replace(Regex("[^\\p{L}\\p{N}\\s]+"), " ")
+                                        .replace(Regex("\\s+"), " ")
+                                        .trim()
+                                    val command = if (lower == "hey erez" || lower.startsWith("hey erez ")) {
+                                        lower.removePrefix("hey erez").trim()
+                                    } else ""
+                                    if (transcript.isNotBlank()) {
+                                        sendBroadcast(
+                                            Intent(ACTION_TRANSCRIPT).setPackage(packageName)
+                                                .putExtra(EXTRA_TRANSCRIPT, transcript)
+                                        )
                                     }
-                                } else {
-                                    wakeArmedUntil = 0L
-                                    updateNotification("Voice ignored: speaker did not match the enrolled profile.")
+                                    if (command.isNotBlank()) {
+                                        sendBroadcast(Intent(ACTION_RECOGNIZED).setPackage(packageName).putExtra(EXTRA_COMMAND, command))
+                                        commandAsr?.close()
+                                        commandAsr = null
+                                        offlineSpeech = null
+                                        commandMode = false
+                                        kws.reset(kwsStream)
+                                        updateNotification("Hey Erez standby is active · command received")
+                                    } else {
+                                        commandMode = true
+                                        commandDeadline = android.os.SystemClock.elapsedRealtime() + 15_000L
+                                        sendBroadcast(Intent(ACTION_WAKE_HEARD).setPackage(packageName))
+                                        updateNotification("I'm listening for your command…")
+                                    }
+                                } catch (e: Exception) {
+                                    try { asr.close() } catch (_: Exception) {}
+                                    commandAsr = null
+                                    offlineSpeech = null
+                                    commandMode = false
+                                    kws.reset(kwsStream)
+                                    updateNotification("Command recognition failed: " + (e.message ?: "unknown error"))
+                                }
+                            } else {
+                                updateNotification("Voice ignored: speaker did not match the enrolled profile.")
+                                kws.reset(kwsStream)
+                            }
+                        } else if (commandMode) {
+                            val asr = commandAsr
+                            if (asr != null) {
+                                val transcript = asr.transcribe(audioSample)
+                                if (transcript.isNotBlank()) {
+                                    val ownerMatched = identity.verify(audioSample)
+                                    if (ownerMatched) {
+                                        sendBroadcast(
+                                            Intent(ACTION_TRANSCRIPT).setPackage(packageName)
+                                                .putExtra(EXTRA_TRANSCRIPT, transcript)
+                                        )
+                                        sendBroadcast(
+                                            Intent(ACTION_RECOGNIZED).setPackage(packageName)
+                                                .putExtra(EXTRA_COMMAND, transcript.trim())
+                                        )
+                                    } else {
+                                        updateNotification("Voice ignored: speaker did not match the enrolled profile.")
+                                    }
+                                    commandMode = false
+                                    commandDeadline = 0L
+                                    try { asr.close() } catch (_: Exception) {}
+                                    commandAsr = null
+                                    offlineSpeech = null
+                                    kws.reset(kwsStream)
+                                    updateNotification("Hey Erez standby is active · say Hey Erez")
                                 }
                             }
                         }
@@ -238,14 +337,16 @@ class VoiceAssistantService : Service() {
                 }
             }
         } catch (e: Exception) {
-            Log.e("ErezAI", "Offline voice session failed", e)
-            if (running) updateNotification("Offline listening error: ${e.message ?: "unknown"}")
+            Log.e("ErezAI", "Offline wake-word session failed", e)
+            if (running) updateNotification("Wake-word standby error: " + (e.message ?: "unknown error"))
             running = false
         } finally {
             try { recorder?.stop() } catch (_: Exception) {}
             try { recorder?.release() } catch (_: Exception) {}
             recorder = null
-            try { asr.close() } catch (_: Exception) {}
+            try { commandAsr?.close() } catch (_: Exception) {}
+            try { kwsStream?.release() } catch (_: Exception) {}
+            try { kws?.release() } catch (_: Exception) {}
             try { identity.close() } catch (_: Exception) {}
             offlineSpeech = null
             if (!running) stopSelf()
