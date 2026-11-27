@@ -227,8 +227,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         ErezAiBrain.prepare(this) { message ->
             runOnUiThread {
                 say(message)
-                val failed = message.startsWith("AI engine failed to load")
-                val ready = message.contains("Local AI engine is ready")
+                val failed = message.startsWith("The local AI brain failed to load")
+                val ready = message.startsWith("The local AI brain is ready")
                 if (::modelRetryButton.isInitialized) {
                     modelRetryButton.visibility = if (failed) android.view.View.VISIBLE else android.view.View.GONE
                     modelRetryButton.isEnabled = failed
