@@ -1,47 +1,28 @@
-# ארז AI — Android-first local assistant
+# Erez AI — English-first Android assistant
 
-פרויקט Android מקורי ב-Kotlin. פיתוח iPhone מושהה עד להשלמת Android.
+## Target behavior
+- Wake phrase: **Hey Erez**. A first-run 9-second voice enrollment creates a local speaker profile; the wake phrase is checked against it before the assistant responds.
+- English-first commands, reasoning, status messages, and assistant replies.
+- Multilingual speech and screen understanding: Hebrew and English source text must be preserved; reading Hebrew aloud uses a Hebrew Android TTS voice when installed.
+- Screen projection is requested only when the user asks for screen/image understanding. A single-frame capture is the default; OCR and bitmap processing stop after each request. The user-approved projection session stays available until stopped from its notification, avoiding repeated consent prompts while idle processing remains disabled. Accessibility access is optional and requires the user to enable the Android service.
+- WhatsApp replies are intended to be voice notes only. Typed WhatsApp sending has been removed from the current command flow.
+- Local/offline inference avoids paid API keys and per-request API fees. Device storage, RAM, CPU speed, battery, model licenses, and Android permission rules still apply.
 
-## עקרונות עלות ופרטיות
-- אין שימוש ב-API בתשלום, מפתח API בתשלום, מנוי או חיוב לפי פעולה.
-- מודל השפה והראייה רץ מקומית על המכשיר דרך LiteRT-LM.
-- זיהוי הדיבור בעברית רץ מקומית דרך Whisper Base + sherpa-onnx.
-- לאחר הורדת המודלים הראשונית, שיחה, זיהוי דיבור וניתוח תמונות אינם תלויים במכסת שימוש של ספק AI.
-- חיפוש רשת משתמש בדף HTML ציבורי של DuckDuckGo ללא מפתח API; ספק החיפוש עדיין עשוי להפעיל הגנות אנטי-בוט רגילות.
-- הורדות ראשוניות דורשות אינטרנט. יש צורך בכ־2.2GB פנויים למודל הראייה והשפה ועוד כ־160MB למודל הדיבור, בנוסף למקום זמני.
+## Current implementation
+The app uses a local Qwen2-VL 2B model through LiteRT-LM, MediaProjection for user-approved screen capture, a compact sherpa-onnx English keyword spotter for standby, Whisper Base multilingual loaded only after wake for commands, a local sherpa-onnx speaker-embedding model for owner checks, Android TextToSpeech with automatic language selection and Android's Hebrew voice-data installer, and an optional AccessibilityService for visible UI text.
 
-## רכיבים שממומשים בקוד
-- אפליקציית Android בעברית, ממשק פקודות ועוזר צף.
-- מודל Qwen2-VL 2B מקומי לשיחה ולהבנת תמונות דרך LiteRT-LM. ההורדה ניתנת לחידוש ומאומתת באמצעות SHA-256.
-- דגימת מסך דרך MediaProjection בהסכמה מפורשת, עם שמירת עד שישה פריימים אחרונים לניתוח רצף קצר של וידאו.
-- זיהוי טקסט באנגלית עם ML Kit, זיהוי עברית עם Tesseract מקומי, ותוויות חזותיות כלליות.
-- זיהוי דיבור עברי מקומי עם Whisper Base multilingual דרך sherpa-onnx. ההאזנה פועלת בשירות foreground עם התראה וכפתור עצירה. פקודות קוליות דורשות פתיחה במילת ההפעלה "ארז" כדי לא לפרש דיבור מסרטונים כפקודות.
-- השהיית המיקרופון בזמן שהעוזר מדבר כדי לצמצם הד.
-- חיפוש רשת ללא מפתח API והעברת תוצאות למודל המקומי לסיכום עם קישורים.
-- מסך אישור לפני פתיחת פעולות תקשורת ויומן: WhatsApp, דוא"ל, חיוג ואירועים. WhatsApp ודוא"ל עדיין דורשים את אישור השליחה הסופי באפליקציה שלהם; חיוג נפתח בחייגן; אירוע נפתח ביומן.
-- ניסוח תגובות בעזרת המודל המקומי והעתקת הטיוטה ללוח לאחר אישור.
-- שירות נגישות אופציונלי לקריאת טקסט גלוי, רק לאחר שהמשתמש מפעיל אותו ידנית בהגדרות Android.
-- GitHub Actions בונה APK Debug בכל push ל-main.
+## Important gaps — not yet release-ready
+- Keyword spotting is lighter than continuous Whisper transcription, but microphone foreground service and CPU/battery use still need measurement on the target phone.
+- Speech is processed locally to detect the wake phrase; transcripts are exposed to the assistant only after the enrolled speaker matches. Speaker verification is probabilistic, not secure biometric authentication. It can reject the owner in noisy conditions or accept a sufficiently similar voice; never use it as the sole protection for payments, account access, or other high-risk actions.
+- Hebrew read-aloud uses an installed Android Hebrew TTS voice. If none is available, Erez opens Android's voice-data installer; a bundled offline Hebrew neural voice is not included.
+- WhatsApp voice-note recording and sending are not implemented yet. The app must not claim to send voice notes until the flow is built and tested against the installed WhatsApp version.
+- General phone actions are not universally supported. Each action needs a concrete Android implementation, the relevant permission, and a confirmation step where appropriate.
+- A successful CI build does not prove runtime reliability on the target Xiaomi/Android device. Real-device tests are still required before release.
 
-## מגבלות שעדיין דורשות אימות במכשיר
-- בניית APK מוצלחת מאמתת קומפילציה בלבד, לא ביצוע תקין במכשיר.
-- מודל Qwen2-VL גדול; מהירות, צריכת RAM, חום ויכולת הרצה תלויים בדגם הטלפון ובזיכרון הפנוי.
-- Whisper Base עשוי להיות איטי במכשירים חלשים. איכות עברית תלויה במיקרופון, רעשי רקע והגייה.
-- ניתוח וידאו מבוסס עד שישה פריימים עוקבים שנדגמים בערך פעם ב־1.2 שניות, ולא הבנה רציפה של כל פריים.
-- שמע של סרטון נקלט דרך המיקרופון רק אם הרמקול משמיע אותו ונגיש למיקרופון. Android ואפליקציות מסוימות חוסמים לכידת שמע פנימי; אין הבטחה לשמוע אודיו דרך אוזניות או תוכן מוגן.
-- פעולות WhatsApp/דוא"ל/יומן/חיוג נפתחות עם פרטים מוכנים, אך האישור הסופי נשאר באפליקציית היעד. תגובות מועתקות ללוח ולא מתפרסמות אוטומטית.
-- חיפוש רשת תלוי בזמינות ובמדיניות של אתר החיפוש החינמי.
+## Android constraints
+- A reliable background wake phrase requires a foreground microphone service and a persistent Android notification. Android and device battery-management settings may restrict background microphone access.
+- Screen capture requires Android system consent and cannot be silently enabled by the app.
+- Voice matching is probabilistic and must not be treated as secure biometric authentication for payments, account access, or other high-risk actions.
 
-## בנייה
-GitHub Actions: `.github/workflows/build-apk.yml`
-הפקודה: `gradle --no-daemon assembleDebug`
-Artifact: `Erez-AI-debug-APK`
-
-## מודלים וספריות
-- LiteRT-LM + Qwen2-VL 2B — מודל מקומי להסקה חזותית ושפתית.
-- sherpa-onnx + Whisper Base multilingual — זיהוי דיבור מקומי.
-- Tesseract4Android עם `heb.traineddata` — OCR עברי מקומי.
-- Google ML Kit — OCR לטיני ותוויות תמונה.
-- Jsoup — קריאת תוצאות HTML של חיפוש ציבורי.
-
-הפרויקט אינו מוצג כמוצר גמור עד שבניית ה-APK עוברת ונבדקות בפועל יכולות הליבה במכשיר Android היעד.
+## Build
+GitHub Actions builds a debug APK on pushes to `main` and `english-core-hey-erez`, and on pull requests to `main`. The migration stays on its development branch until the APK builds and device tests pass.

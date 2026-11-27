@@ -36,16 +36,23 @@ class ScreenCaptureService : Service() {
         const val EXTRA_SCREEN_IMAGE_PATH = "screen_image_path"
         const val EXTRA_SCREEN_FRAME_PATHS = "screen_frame_paths"
         const val ACTION_STOP = "com.erezai.assistant.screen.STOP"
+        const val ACTION_CAPTURE_ONCE = "com.erezai.assistant.screen.CAPTURE_ONCE"
+        @Volatile var projectionActive = false
+        const val EXTRA_ONE_SHOT = "screen_capture_one_shot"
         const val ACTION_SCREEN_STOPPED = "com.erezai.assistant.SCREEN_STOPPED"
-        private const val FRAME_INTERVAL_MS = 4000L
+        const val ACTION_SCREEN_CAPTURE_DONE = "com.erezai.assistant.SCREEN_CAPTURE_DONE"
+        const val ACTION_SCREEN_CAPTURE_FAILED = "com.erezai.assistant.SCREEN_CAPTURE_FAILED"
+        private const val FRAME_INTERVAL_MS = 1000L
     }
 
     private var projection: MediaProjection? = null
+    @Volatile private var oneShot = true
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
     private var captureThread: HandlerThread? = null
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val processing = AtomicBoolean(false)
+    private val captureRequested = AtomicBoolean(false)
     private val recentFrames = ArrayDeque<File>()
     // Tesseract is not thread-safe. Initialization and every OCR call share this worker.
     private val ocrWorker = Executors.newSingleThreadExecutor()
@@ -60,10 +67,21 @@ class ScreenCaptureService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_CAPTURE_ONCE && projection != null) {
+            oneShot = true
+            captureRequested.set(true)
+            reader?.setOnImageAvailableListener(
+                { source -> processLatestFrame(source) },
+                captureThread?.looper?.let { Handler(it) }
+            )
+            return START_STICKY
+        }
+        oneShot = intent?.getBooleanExtra(EXTRA_ONE_SHOT, true) ?: true
+        captureRequested.set(true)
         val channel = "erez_screen_capture"
         if (Build.VERSION.SDK_INT >= 26) {
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel(channel, "שיתוף מסך פעיל", NotificationManager.IMPORTANCE_LOW))
+            manager.createNotificationChannel(NotificationChannel(channel, "Screen access ready", NotificationManager.IMPORTANCE_LOW))
         }
         val stopIntent = PendingIntent.getService(
             this, 71, Intent(this, ScreenCaptureService::class.java).setAction(ACTION_STOP),
@@ -71,19 +89,20 @@ class ScreenCaptureService : Service() {
         )
         startForeground(71, NotificationCompat.Builder(this, channel)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("ארז AI פעיל")
-            .setContentText("ניתוח מסך ותמונות פעיל לבקשתך")
+            .setContentTitle("Erez AI active")
+            .setContentText("Screen captures run only when you ask")
             .setOngoing(true)
-            .addAction(android.R.drawable.ic_media_pause, "עצור שיתוף מסך", stopIntent)
+            .addAction(android.R.drawable.ic_media_pause, "Stop screen sharing", stopIntent)
             .build())
 
-        if (projection != null) return START_NOT_STICKY
+        if (projection != null) return START_STICKY
         val resultCode = intent?.getIntExtra("resultCode", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
         val data = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra("data", Intent::class.java)
             else @Suppress("DEPRECATION") intent?.getParcelableExtra("data")
         if (resultCode == Activity.RESULT_OK && data != null) {
             val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             projection = mgr.getMediaProjection(resultCode, data)
+            projectionActive = projection != null
             projection?.registerCallback(object : MediaProjection.Callback() {
                 override fun onStop() { stopSelf() }
             }, android.os.Handler(mainLooper))
@@ -110,6 +129,10 @@ class ScreenCaptureService : Service() {
     private fun processLatestFrame(source: ImageReader) {
         val now = SystemClock.elapsedRealtime()
         if (now - lastFrameAt < FRAME_INTERVAL_MS) {
+            try { source.acquireLatestImage()?.close() } catch (_: Exception) {}
+            return
+        }
+        if (!captureRequested.get()) {
             try { source.acquireLatestImage()?.close() } catch (_: Exception) {}
             return
         }
@@ -166,10 +189,10 @@ class ScreenCaptureService : Service() {
                     if (!hebrewOcrReady) hebrewOcrReady = hebrewOcr.initialize()
                     lastHebrewText = if (hebrewOcrReady) hebrewOcr.recognize(bitmap) else ""
                     val combined = buildString {
-                        if (lastText.isNotBlank()) append("טקסט שזוהה במסך:\n").append(lastText)
+                        if (lastText.isNotBlank()) append(lastText)
                         if (lastHebrewText.isNotBlank()) {
                             if (isNotEmpty()) append("\n\n")
-                            append("טקסט בעברית שזוהה במסך:\n").append(lastHebrewText)
+                            append(lastHebrewText)
                         }
                     }.take(5000)
 
@@ -202,12 +225,18 @@ class ScreenCaptureService : Service() {
                 } finally {
                     bitmap.recycle()
                     processing.set(false)
+                    if (oneShot) {
+                        captureRequested.set(false)
+                        reader?.setOnImageAvailableListener(null, null)
+                        sendBroadcast(Intent(ACTION_SCREEN_CAPTURE_DONE).setPackage(packageName))
+                    }
                 }
             }
         }
     }
 
     override fun onDestroy() {
+        projectionActive = false
         sendBroadcast(Intent(ACTION_SCREEN_STOPPED).setPackage(packageName))
         display?.release()
         reader?.setOnImageAvailableListener(null, null)

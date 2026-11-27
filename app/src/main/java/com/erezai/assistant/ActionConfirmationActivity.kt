@@ -38,13 +38,13 @@ class ActionConfirmationActivity : Activity() {
             setBackgroundColor(0xFF101827.toInt())
         }
         root.addView(TextView(this).apply {
-            text = "אישור פעולה · ארז AI"
+            text = "Action confirmation · Erez AI"
             textSize = 24f
             setTextColor(-1)
             gravity = Gravity.CENTER
         })
         detailText = TextView(this).apply {
-            text = title + if (recipient.isNotBlank()) "\nאל: $recipient" else ""
+            text = title + if (recipient.isNotBlank()) "\nTo: $recipient" else ""
             textSize = 18f
             setTextColor(-1)
             setPadding(0, 24, 0, 12)
@@ -57,16 +57,16 @@ class ActionConfirmationActivity : Activity() {
             setPadding(0, 0, 0, 24)
         })
         confirmButton = Button(this).apply {
-            text = if ((type == TYPE_CALL || type == TYPE_WHATSAPP) && phone.isBlank()) "בחר איש קשר" else "אשר והמשך"
+            text = if (type == TYPE_CALL && phone.isBlank()) "Choose contact" else "Confirm and continue"
             setOnClickListener {
-                if ((type == TYPE_CALL || type == TYPE_WHATSAPP) && phone.isBlank() && selectedPhone.isBlank()) {
+                if (type == TYPE_CALL && phone.isBlank() && selectedPhone.isBlank()) {
                     try {
                         startActivityForResult(
                             Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI),
                             REQUEST_PHONE
                         )
                     } catch (_: Exception) {
-                        Toast.makeText(this@ActionConfirmationActivity, "לא ניתן לפתוח אנשי קשר", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@ActionConfirmationActivity, "Could not open contacts", Toast.LENGTH_LONG).show()
                     }
                 } else {
                     executeAction(type, title, body, recipient, selectedPhone.ifBlank { phone })
@@ -75,7 +75,7 @@ class ActionConfirmationActivity : Activity() {
         }
         root.addView(confirmButton)
         root.addView(Button(this).apply {
-            text = "ביטול"
+            text = "Cancel"
             setOnClickListener { finish() }
         })
         setContentView(root)
@@ -91,35 +91,23 @@ class ActionConfirmationActivity : Activity() {
             if (cursor.moveToFirst()) selectedPhone = cursor.getString(0).orEmpty()
         }
         if (selectedPhone.isNotBlank()) {
-            detailText?.text = "איש קשר נבחר\n$selectedPhone"
-            confirmButton?.text = "אשר והמשך"
+            detailText?.text = "Selected contact\n$selectedPhone"
+            confirmButton?.text = "Confirm and continue"
         } else {
-            Toast.makeText(this, "לא נמצא מספר לאיש הקשר", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "No phone number found for this contact", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun executeAction(type: String, title: String, body: String, recipient: String, phone: String) {
         try {
             when (type) {
-                TYPE_WHATSAPP -> {
-                    if (phone.filter { it.isDigit() }.length >= 8) {
-                        var digits = phone.filter { it.isDigit() }
-                        if (digits.startsWith("0")) digits = "972" + digits.drop(1)
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$digits?text=" + Uri.encode(body))))
-                    } else {
-                        val share = Intent(Intent.ACTION_SEND).setType("text/plain")
-                            .putExtra(Intent.EXTRA_TEXT, body)
-                        try { startActivity(share.setPackage("com.whatsapp")) }
-                        catch (_: Exception) { startActivity(Intent.createChooser(share, "שליחה בוואטסאפ")) }
-                    }
-                }
                 TYPE_EMAIL -> {
                     val uri = Uri.parse("mailto:" + Uri.encode(recipient) +
                         "?subject=" + Uri.encode(title) + "&body=" + Uri.encode(body))
                     startActivity(Intent(Intent.ACTION_SENDTO, uri))
                 }
                 TYPE_CALL -> {
-                    if (phone.isBlank()) throw IllegalArgumentException("לא זוהה מספר טלפון")
+                    if (phone.isBlank()) throw IllegalArgumentException("No phone number was detected")
                     startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(phone))))
                 }
                 TYPE_CALENDAR -> {
@@ -128,7 +116,7 @@ class ActionConfirmationActivity : Activity() {
                         .putExtra(CalendarContract.Events.DESCRIPTION, body)
                     val date = Regex("(\\d{1,2})[./](\\d{1,2})[./](\\d{4})").find(title)
                     val time = Regex("\\b([01]?\\d|2[0-3]):([0-5]\\d)\\b").find(title)
-                    val hasRelativeDate = title.contains("מחר") || title.contains("היום")
+                    val hasRelativeDate = title.contains("tomorrow", ignoreCase = true) || title.contains("today", ignoreCase = true)
                     if (date != null || hasRelativeDate) {
                         val start = Calendar.getInstance()
                         if (date != null) {
@@ -138,13 +126,13 @@ class ActionConfirmationActivity : Activity() {
                                 date.groupValues[1].toInt(),
                                 9, 0, 0
                             )
-                        } else if (title.contains("מחר")) {
+                        } else if (title.contains("tomorrow", ignoreCase = true)) {
                             start.add(Calendar.DAY_OF_YEAR, 1)
                         }
                         if (time != null) {
                             start.set(Calendar.HOUR_OF_DAY, time.groupValues[1].toInt())
                             start.set(Calendar.MINUTE, time.groupValues[2].toInt())
-                        } else if (date == null && title.contains("היום")) {
+                        } else if (date == null && title.contains("today", ignoreCase = true)) {
                             start.add(Calendar.MINUTE, 15)
                         } else {
                             start.set(Calendar.HOUR_OF_DAY, 9)
@@ -161,13 +149,13 @@ class ActionConfirmationActivity : Activity() {
                 }
                 TYPE_COMMENT -> {
                     val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("תגובה", body))
-                    Toast.makeText(this, "התגובה הועתקה. אפשר להדביק אותה בשדה התגובה.", Toast.LENGTH_LONG).show()
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Comment", body))
+                    Toast.makeText(this, "Comment copied. You can paste it into the comment field.", Toast.LENGTH_LONG).show()
                 }
-                else -> throw IllegalArgumentException("סוג פעולה לא מוכר")
+                else -> throw IllegalArgumentException("Unknown action type")
             }
         } catch (e: Exception) {
-            Toast.makeText(this, e.message ?: "לא ניתן לפתוח את הפעולה", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, e.message ?: "Could not open this action", Toast.LENGTH_LONG).show()
         } finally {
             finish()
         }
@@ -179,7 +167,6 @@ class ActionConfirmationActivity : Activity() {
         const val EXTRA_BODY = "action_body"
         const val EXTRA_RECIPIENT = "action_recipient"
         const val EXTRA_PHONE = "action_phone"
-        const val TYPE_WHATSAPP = "whatsapp"
         const val TYPE_EMAIL = "email"
         const val TYPE_CALL = "call"
         const val TYPE_CALENDAR = "calendar"

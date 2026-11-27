@@ -1,6 +1,8 @@
 name: Build Android APK
 on:
   push:
+    branches: [ main, english-core-hey-erez ]
+  pull_request:
     branches: [ main ]
   workflow_dispatch:
 permissions:
@@ -27,6 +29,25 @@ jobs:
           gradle-version: '8.9'
       - name: Install Android SDK packages
         run: yes | sdkmanager --licenses >/dev/null; sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Prepare compact English wake-word model
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet sherpa-onnx sentencepiece click pypinyin
+          curl -fL --retry 3 --retry-delay 2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2 \
+            -o /tmp/erez-kws.tar.bz2
+          tar -xjf /tmp/erez-kws.tar.bz2 -C /tmp
+          MODEL_DIR=/tmp/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01
+          mkdir -p app/src/main/assets/erez-kws
+          cp "$MODEL_DIR/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx" app/src/main/assets/erez-kws/encoder.onnx
+          cp "$MODEL_DIR/decoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx" app/src/main/assets/erez-kws/decoder.onnx
+          cp "$MODEL_DIR/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx" app/src/main/assets/erez-kws/joiner.onnx
+          cp "$MODEL_DIR/tokens.txt" app/src/main/assets/erez-kws/tokens.txt
+          printf 'HEY EREZ\n' > /tmp/erez-keywords.txt
+          sherpa-onnx-cli text2token --tokens "$MODEL_DIR/tokens.txt" --tokens-type bpe --bpe-model "$MODEL_DIR/bpe.model" /tmp/erez-keywords.txt app/src/main/assets/erez-kws/hey_erez_keywords.txt
+          test -s app/src/main/assets/erez-kws/hey_erez_keywords.txt
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
