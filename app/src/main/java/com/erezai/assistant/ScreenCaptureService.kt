@@ -78,6 +78,12 @@ class ScreenCaptureService : Service() {
             .build())
 
         if (projection != null) return START_NOT_STICKY
+        // Remove stale captures left by a previous process/session. The active
+        // session keeps at most two frames in recentFrames.
+        val frameCache = File(cacheDir, "erez-recent-frames")
+        frameCache.listFiles()?.forEach { it.delete() }
+        synchronized(recentFrames) { recentFrames.clear() }
+        lastFrameAt = 0L
         val resultCode = intent?.getIntExtra("resultCode", Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
         val data = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra("data", Intent::class.java)
             else @Suppress("DEPRECATION") intent?.getParcelableExtra("data")
