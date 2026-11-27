@@ -54,10 +54,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             val i = Intent(this, ScreenCaptureService::class.java)
                 .putExtra("resultCode", result.resultCode).putExtra("data", result.data)
             ContextCompat.startForegroundService(this, i)
-            say("שיתוף המסך הופעל. אני מנתח תמונות וטקסט. אפשר לעבור לאפליקציה אחרת; ההתראה תציג שהשיתוף פעיל.")
+            say("Screen sharing is on. I can analyze images and text while you use other apps. The notification shows when sharing is active.")
             startVoiceService()
         } else {
-            say("שיתוף המסך לא אושר. אפשר להמשיך בשיחה קולית, אבל לא אוכל לראות את המסך.")
+            say("Screen sharing was not approved. Voice chat can continue, but I cannot see your screen.")
             startVoiceService()
         }
     }
@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         // First-run setup is automatic: prepare the local AI model and request
         // the minimum permissions in sequence instead of asking the user to find
         // separate download/start buttons.
-        say("מתחיל להכין את ארז AI. הורדת המודל המקומי עשויה להיות גדולה ודורשת חיבור Wi-Fi ואחסון פנוי.")
+        say("Preparing Erez AI. The local model download is large and requires Wi-Fi and free storage.")
         prepareBrain()
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -134,14 +134,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             setBackgroundColor(0xFF101827.toInt())
         }
         val title = TextView(this).apply {
-            text = "ארז AI"; textSize = 30f; setTextColor(-1)
+            text = "Erez AI"; textSize = 30f; setTextColor(-1)
             gravity = Gravity.CENTER; setPadding(0, 0, 0, 18)
         }
         val subtitle = TextView(this).apply {
-            text = "העוזר האישי שלך · עברית"; setTextColor(0xFFB7C4D8.toInt()); gravity = Gravity.CENTER
+            text = "Your personal assistant · English + Hebrew"; setTextColor(0xFFB7C4D8.toInt()); gravity = Gravity.CENTER
         }
         command = EditText(this).apply {
-            hint = "כתוב לי מה לעשות…"; textSize = 17f; setTextColor(-1); setHintTextColor(0xFF9AA8BA.toInt())
+            hint = "Tell me what to do…"; textSize = 17f; setTextColor(-1); setHintTextColor(0xFF9AA8BA.toInt())
         }
         log = TextView(this).apply {
             text = "שלום. ארז AI ממתין לטעינת המודל המקומי.\n"
@@ -155,7 +155,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         root.addView(subtitle)
         root.addView(command)
         root.addView(TextView(this).apply {
-            text = "ההתקנה והכנת המודלים מתבצעות אוטומטית ברקע."
+            text = "AI model setup runs automatically in the background."
             setTextColor(0xFFB7C4D8.toInt())
             textSize = 14f
             setPadding(0, 12, 0, 12)
@@ -164,7 +164,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         modelRetryButton = button("נסה לטעון את מוח הבינה שוב") { prepareBrain() }.apply { visibility = android.view.View.GONE }
         root.addView(modelRetryButton)
         root.addView(TextView(this).apply {
-            text = "השיחה, ההאזנה והצפייה במסך מופעלות אוטומטית לאחר אישורי Android. אפשר לעצור דרך ההתראה של ארז AI."
+            text = "Conversation, listening, and screen access start after Android permissions. Stop listening from the Erez AI notification."
             setTextColor(0xFFB7C4D8.toInt())
             textSize = 13f
             setPadding(0, 10, 0, 10)
@@ -212,7 +212,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private fun ensureOverlayAndStartVoice() {
         if (!android.provider.Settings.canDrawOverlays(this)) {
             pendingVoiceStart = true
-            say("נדרשת הרשאה חד-פעמית להצגת ארז מעל אפליקציות. פתח את מסך ההרשאה של Android ואשר; ארז ימשיך אוטומטית כשתחזור.")
+            say("Allow Erez AI to display over other apps. Approve the Android permission; setup will continue when you return.")
             startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
@@ -222,7 +222,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private fun requestScreenCaptureConsent() {
         if (screenConsentRequested) return
         screenConsentRequested = true
-        say("נדרש אישור Android חד-פעמי לשיתוף המסך. אשר בחלון שיופיע כדי שארז יוכל להבין מה מוצג באפליקציות.")
+        say("Android needs your one-time approval for screen sharing. Approve the dialog so Erez can understand what's displayed in other apps.")
         val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         screenConsent.launch(mgr.createScreenCaptureIntent())
     }
@@ -266,7 +266,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 } else {
                     val answer = StringBuilder()
                     ErezAiBrain.ask(
-                        "ענה בעברית על השאלה: " + query +
+                        "Answer in clear English: " + query +
                             "\\nהשתמש רק במידע הבא. ציין אי-ודאות והצג את הקישורים שסופקו ללא שינוי.\\n\\n" + sourceText,
                         { part -> answer.append(part) },
                         {
@@ -340,11 +340,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
             }
             t.contains("תגובה") || t.contains("הגב") || t.contains("write a comment", true) || t.contains("reply", true) -> {
-                if (!ErezAiBrain.isReady()) speak("כדי לנסח תגובה, צריך לטעון קודם את מוח הבינה המקומי.")
+                if (!ErezAiBrain.isReady()) speak("The local AI model must be ready before I can draft a comment.")
                 else {
                     val draft = StringBuilder()
                     ErezAiBrain.ask(
-                        "נסח תגובה בעברית טבעית וקצרה שמתאימה לפוסט או לסרטון שמופיעים במסך. החזר רק את נוסח התגובה. בקשת המשתמש: " +
+                        "Write a concise natural English comment appropriate for the post or video on screen. Return only the comment. Understand Hebrew screen content. User request: " +
                             t + "\\nתוכן המסך:\\n" + latestScreenText.take(5000),
                         { part -> draft.append(part) },
                         { runOnUiThread { confirmAction(ActionConfirmationActivity.TYPE_COMMENT, "טיוטת תגובה להעתקה", draft.toString()) } },
@@ -361,13 +361,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
                 confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", msg, phone = phone)
             }
-            t.contains("מייל") || t.contains("אימייל") || t.contains("email", true) || t.contains("e-mail", true) -> {
+            t.contains("מייל") || t.contains("אימייל") || t.contains("email", true) || t.contains("e-mail", true) || t.contains("email", true) || t.contains("e-mail", true) -> {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(t)?.value.orEmpty()
                 val subject = t.substringAfter("נושא", "הודעה מארז AI").substringBefore("תוכן").trim().ifBlank { "הודעה מארז AI" }
                 if (ErezAiBrain.isReady()) {
                     val draft = StringBuilder()
                     ErezAiBrain.ask(
-                        "נסח גוף של הודעת דואר בעברית לפי בקשת המשתמש. החזר רק את גוף ההודעה, בלי כותרות. בקשה: " + t,
+                        "Write the email body in concise natural English. Return only the body, without headings. Request: " + t,
                         { part -> draft.append(part) },
                         { runOnUiThread { confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, draft.toString(), recipient = recipient) } },
                         { error -> runOnUiThread { speak(error) } }
@@ -377,7 +377,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, body, recipient = recipient)
                 }
             }
-            t.contains("התקשר") || t.contains("חייג") || t.contains("call ", true) || t.startsWith("call", true) || t.contains("dial ", true) -> {
+            t.contains("התקשר") || t.contains("חייג") || t.contains("call ", true) || t.startsWith("call", true) || t.contains("dial ", true) || t.contains("call ", true) || t.startsWith("call", true) || t.contains("dial ", true) -> {
                 val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
                 confirmAction(
                     ActionConfirmationActivity.TYPE_CALL,
@@ -386,11 +386,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     phone = number
                 )
             }
-            t.contains("תזכורת") || t.contains("יומן") || t.contains("remind me", true) || t.contains("calendar", true) -> {
+            t.contains("תזכורת") || t.contains("יומן") || t.contains("remind me", true) || t.contains("calendar", true) || t.contains("schedule", true) || t.contains("remind me", true) || t.contains("calendar", true) -> {
                 val title = t.substringAfter("תזכורת", t.substringAfter("יומן", t)).trim()
                 confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "תזכורת חדשה" }, "")
             }
-            t.contains("חפש") || t.contains("גוגל") || t.contains("אינטרנט") || t.contains("search", true) || t.contains("google", true) || t.contains("look up", true) -> {
+            t.contains("חפש") || t.contains("גוגל") || t.contains("אינטרנט") || t.contains("search", true) || t.contains("google", true) || t.contains("look up", true) || t.contains("search", true) || t.contains("google", true) || t.contains("look up", true) -> {
                 searchWeb(t.removePrefix("חפש").removePrefix(" לי").removeSuffix("באינטרנט").trim())
             }
             else -> {
@@ -413,7 +413,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         },
                         { error -> runOnUiThread { speak("נתקלתי בבעיה ביצירת התשובה: $error") } }
                     )
-                } else speak("מוח הבינה עדיין נטען או שהטעינה נכשלה. בדוק את הודעת השגיאה במסך ולחץ על ״נסה שוב״.")
+                } else speak("The AI model is still loading or failed. Check the error shown on screen and tap Retry.")
             }
         }
     }
