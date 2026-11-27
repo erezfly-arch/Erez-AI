@@ -47,20 +47,20 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
     private val textReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             if (intent?.action == VoiceAssistantService.ACTION_WAKE_HEARD) {
-                speak("כן, אני שומע. מה תרצה שאעשה?")
+                speak("Yes, I'm listening. What would you like me to do?")
             } else if (intent?.action == VoiceAssistantService.ACTION_RECOGNIZED) {
                 intent.getStringExtra(VoiceAssistantService.EXTRA_COMMAND)?.let { runCommand(it) }
             } else if (intent?.action == VoiceAssistantService.ACTION_TRANSCRIPT) {
                 val transcript = intent.getStringExtra(VoiceAssistantService.EXTRA_TRANSCRIPT).orEmpty()
                 if (transcript.isNotBlank()) {
                     latestAudioText = (latestAudioText + "\n" + transcript).takeLast(2500)
-                    statusText?.text = "זיהוי קולי: $transcript"
+                    statusText?.text = "Heard: $transcript"
                 }
             } else if (intent?.action == VoiceAssistantService.ACTION_STATUS) {
                 latestVoiceStatus = intent.getStringExtra(VoiceAssistantService.EXTRA_STATUS).orEmpty()
                 voiceListening = latestVoiceStatus.contains("מקשיב") || latestVoiceStatus.contains("מוריד מודל") || latestVoiceStatus.contains("מכין זיהוי")
                 statusText?.text = latestVoiceStatus
-                voiceButton?.text = if (voiceListening) "⏹ עצור האזנה" else "🎙️ דבר עם ארז"
+                voiceButton?.text = if (voiceListening) "⏹ Stop listening" else "🎙️ Talk to Erez"
             } else if (intent?.action == ScreenCaptureService.ACTION_SCREEN_STOPPED) {
                 latestText = ""
                 latestScreenImagePath = ""
@@ -97,27 +97,17 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val languageResult = tts?.setLanguage(Locale("he", "IL")) ?: TextToSpeech.LANG_NOT_SUPPORTED
+            val languageResult = tts?.setLanguage(Locale("en", "US")) ?: TextToSpeech.LANG_NOT_SUPPORTED
             // Prefer an installed Hebrew male voice when the Android TTS engine exposes one.
-            val hebrewMale = tts?.voices?.firstOrNull { voice ->
-                voice.locale.language == "he" &&
-                    (voice.name.contains("male", ignoreCase = true) || voice.name.contains("masculine", ignoreCase = true))
-            }
-            if (hebrewMale != null) {
-                tts?.voice = hebrewMale
-                tts?.setPitch(1.0f)
-            } else {
-                // Do not fake a male voice by lowering pitch; retain the natural system voice.
-                tts?.setPitch(1.0f)
-                latestVoiceStatus = "קול גברי עברי ייעודי לא זמין במנוע המותקן; משתמש בקול העברי הזמין."
-                statusText?.text = latestVoiceStatus
-            }
+            val englishVoice = tts?.voices?.firstOrNull { it.locale.language == "en" && it.locale.country.equals("US", true) }
+            if (englishVoice != null) tts?.voice = englishVoice
+            tts?.setPitch(1.0f)
             tts?.setSpeechRate(0.94f)
             ttsReady = languageResult >= TextToSpeech.LANG_AVAILABLE
             val queued = pendingSpeech
             pendingSpeech = ""
             if (queued.isNotBlank() && ttsReady) speak(queued)
-            else if (!ttsReady) statusText?.text = "אין במכשיר קול עברי מותקן. יש להתקין נתוני עברית במנוע הדיבור של Android."
+            else if (!ttsReady) statusText?.text = "No English voice is installed. Install English speech data in Android Text-to-Speech settings."
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_PAUSE) }
                 override fun onDone(utteranceId: String?) { voiceControl(VoiceAssistantService.ACTION_RESUME) }
@@ -137,6 +127,12 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         if (tts == null || !ttsReady) {
             pendingSpeech = message
             return
+        }
+        val containsHebrew = message.any { it in '\u0590'..'\u05FF' }
+        val language = if (containsHebrew) Locale("he", "IL") else Locale("en", "US")
+        val languageResult = tts?.setLanguage(language)
+        if (languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+            tts?.setLanguage(if (containsHebrew) Locale("en", "US") else Locale("he", "IL"))
         }
         voiceControl(VoiceAssistantService.ACTION_PAUSE)
         val result = tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-background")
@@ -210,7 +206,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
             voiceListening = true
             button.text = "⏹ עצור האזנה"
-            speak("אני מקשיב. דבר אליי בעברית.")
+            speak("I'm listening. Say “Hey Erez” when you need me. I understand English and Hebrew.")
         } catch (e: Exception) {
             speak("לא הצלחתי להפעיל את המיקרופון: ${e.message ?: "שגיאה"}")
         }
@@ -228,20 +224,20 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             elevation = dp(16).toFloat()
         }
         val heading = TextView(this).apply {
-            text = "✨  ארז AI"
+            text = "✨  Erez AI"
             textSize = 22f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
             setPadding(0, 0, 0, dp(8))
         }
         val subtitle = TextView(this).apply {
-            text = "אפשר לדבר איתי או לכתוב לי"
+            text = "Talk to me or type a command"
             textSize = 13f
             setTextColor(0xFFB9C7E8.toInt())
             setPadding(0, 0, 0, dp(12))
         }
         val input = EditText(this).apply {
-            hint = "כתוב כאן מה תרצה לעשות…"
+            hint = "Tell me what you want me to do…"
             setTextColor(Color.WHITE)
             setHintTextColor(0xFF9EACC5.toInt())
             textSize = 16f
@@ -275,7 +271,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         }
         voiceButton = mic
         actions.addView(mic, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(6) })
-        actions.addView(styledButton("שלח  ➤", 0xFF2563EB.toInt()) {
+        actions.addView(styledButton("Send  ➤", 0xFF2563EB.toInt()) {
             runCommand(input.text.toString())
         }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(6) })
 
@@ -283,10 +279,10 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        secondary.addView(styledButton("מה במסך?", 0xFF0F766E.toInt()) {
+        secondary.addView(styledButton("What's on screen?", 0xFF0F766E.toInt()) {
             runCommand("מה במסך?")
         }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(5) })
-        secondary.addView(styledButton("סגור", 0xFF475569.toInt()) {
+        secondary.addView(styledButton("Close", 0xFF475569.toInt()) {
             hidePanel()
         }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(5) })
 
@@ -314,11 +310,11 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         when {
             command.contains("מה במסך") || command.contains("מה אתה רואה") || command.contains("תאר את המסך") -> {
                 if (latestText.isBlank() && latestScreenImagePath.isBlank()) {
-                    speak("אין כרגע תמונת מסך זמינה. הפעל שיתוף מסך או שירות נגישות.")
+                    speak("No screen image is available. Enable screen sharing or the accessibility service.")
                 } else if (ErezAiBrain.isReady()) {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
                     val audioContext = if (latestAudioText.isBlank()) "" else "\n\nדיבור שנקלט מהמיקרופון בסרטון או בסביבה (תמלול אוטומטי, ייתכנו שגיאות):\n" + latestAudioText
-                    askAi("תאר בעברית מה מופיע כרגע במסך ומה חשוב לדעת. התבסס על צילום המסך האחרון ועל הטקסט שזוהה. ענה ישירות ובקצרה.\n" + latestText.take(5000) + audioContext, snapshot)
+                    askAi("Describe in clear English what is currently visible on the screen and what matters. Understand and accurately transcribe Hebrew text. Use the latest screenshot and extracted text.\\n" + latestText.take(5000) + audioContext, snapshot)
                 } else {
                     speak("זיהיתי טקסט במסך, אבל מנוע הבינה עדיין לא נטען: " + latestText.take(800))
                 }
@@ -331,7 +327,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     val draft = StringBuilder()
                     speak("אני מנסח תגובה לפי התוכן שמופיע במסך…")
                     ErezAiBrain.ask(
-                        "נסח תגובה בעברית טבעית וקצרה שמתאימה לפוסט או לסרטון שמופיעים במסך. " +
+                        "Write a concise, natural English comment appropriate for the post or video on screen. Understand the screen content even when it is in Hebrew. "
                             "אל תמציא עובדות. החזר רק את נוסח התגובה. בקשת המשתמש: " + command +
                             "\\nתוכן המסך והדיבור שנקלט:\\n" + context,
                         { part -> draft.append(part) },
@@ -368,7 +364,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 if (ErezAiBrain.isReady()) {
                     val draft = StringBuilder()
                     ErezAiBrain.ask(
-                        "נסח גוף של הודעת דואר בעברית לפי בקשת המשתמש. החזר רק את גוף ההודעה, בלי כותרות. בקשה: " + command,
+                        "Write the email body in concise natural English based on this request. Return only the body, without headings. Request: " + command,
                         { part -> draft.append(part) },
                         { Handler(Looper.getMainLooper()).post {
                             confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, draft.toString(), recipient = recipient)
@@ -418,7 +414,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 }
                 val answer = StringBuilder()
                 ErezAiBrain.ask(
-                    "ענה בעברית על השאלה: " + query +
+                    "Answer in concise natural English: " + query +
                         "\nהשתמש רק במידע הבא. ציין אי-ודאות, ובסוף הצג את הקישורים שסופקו ללא שינוי.\n\n" + sourceText,
                     { part -> answer.append(part) },
                     {
