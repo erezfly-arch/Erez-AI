@@ -308,7 +308,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         if (command.isBlank()) return
         statusText?.text = "שמעתי: $command"
         when {
-            command.contains("מה במסך") || command.contains("מה אתה רואה") || command.contains("תאר את המסך") -> {
+            command.contains("מה במסך") || command.contains("מה אתה רואה") || command.contains("תאר את המסך") || command.contains("what's on screen", true) || command.contains("what is on screen", true) || command.contains("what do you see", true) || command.contains("describe the screen", true) -> {
                 if (latestText.isBlank() && latestScreenImagePath.isBlank()) {
                     speak("No screen image is available. Enable screen sharing or the accessibility service.")
                 } else if (ErezAiBrain.isReady()) {
@@ -316,16 +316,16 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     val audioContext = if (latestAudioText.isBlank()) "" else "\n\nדיבור שנקלט מהמיקרופון בסרטון או בסביבה (תמלול אוטומטי, ייתכנו שגיאות):\n" + latestAudioText
                     askAi("Describe in clear English what is currently visible on the screen and what matters. Understand and accurately transcribe Hebrew text. Use the latest screenshot and extracted text.\\n" + latestText.take(5000) + audioContext, snapshot)
                 } else {
-                    speak("זיהיתי טקסט במסך, אבל מנוע הבינה עדיין לא נטען: " + latestText.take(800))
+                    speak("I can read text on screen, but the AI model is not ready yet: " + latestText.take(800))
                 }
             }
-            command.contains("תגובה") || command.contains("הגב") -> {
+            command.contains("תגובה") || command.contains("הגב") || command.contains("comment", true) || command.contains("write a reply", true) || command.contains("reply to", true) -> {
                 if (!ErezAiBrain.isReady()) {
-                    speak("כדי לנסח תגובה, צריך לטעון קודם את מוח הבינה המקומי.")
+                    speak("I need the local AI model to be ready before I can draft a comment.")
                 } else {
                     val context = (latestText + "\\n" + latestAudioText).take(7000)
                     val draft = StringBuilder()
-                    speak("אני מנסח תגובה לפי התוכן שמופיע במסך…")
+                    speak("Drafting a comment based on the screen…")
                     ErezAiBrain.ask(
                         "Write a concise, natural English comment appropriate for the post or video on screen. Understand the screen content even when it is in Hebrew. "
                             "אל תמציא עובדות. החזר רק את נוסח התגובה. בקשת המשתמש: " + command +
@@ -349,7 +349,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(command)?.value.orEmpty()
                 confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", body, phone = phone)
             }
-            command.contains("התקשר") || command.contains("חייג") -> {
+            command.contains("התקשר") || command.contains("חייג") || command.contains("call ", true) || command.startsWith("call", true) || command.contains("dial ", true) -> {
                 val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(command)?.value.orEmpty()
                 confirmAction(
                     ActionConfirmationActivity.TYPE_CALL,
@@ -358,7 +358,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     phone = number
                 )
             }
-            command.contains("מייל") || command.contains("אימייל") -> {
+            command.contains("מייל") || command.contains("אימייל") || command.contains("email", true) || command.contains("e-mail", true) -> {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(command)?.value.orEmpty()
                 val subject = command.substringAfter("נושא", "הודעה מארז AI").substringBefore("תוכן").trim().ifBlank { "הודעה מארז AI" }
                 if (ErezAiBrain.isReady()) {
@@ -376,11 +376,11 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                     confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, body, recipient = recipient)
                 }
             }
-            command.contains("תזכורת") || command.contains("יומן") -> {
+            command.contains("תזכורת") || command.contains("יומן") || command.contains("remind me", true) || command.contains("calendar", true) || command.contains("schedule", true) -> {
                 val title = command.substringAfter("תזכורת", command.substringAfter("יומן", command)).trim()
                 confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "תזכורת חדשה" }, "")
             }
-            command.contains("חפש") || command.contains("אינטרנט") -> {
+            command.contains("חפש") || command.contains("אינטרנט") || command.contains("search", true) || command.contains("look up", true) || command.contains("google", true) -> {
                 val query = command.removePrefix("חפש").removePrefix(" לי").removeSuffix("באינטרנט").trim()
                 searchWeb(query.ifBlank { command })
             }
@@ -388,7 +388,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
                 if (ErezAiBrain.isReady()) {
                     val context = if (latestText.isBlank()) "" else "\n\nתוכן גלוי כרגע במסך (ייתכן שהוא חלקי):\n" + latestText.take(5000)
                     askAi(command + context)
-                } else speak("מנוע הבינה עדיין לא מוכן. פתח את האפליקציה הראשית ולחץ על הורד והפעל מוח AI מקומי.")
+                } else speak("The AI model is not ready yet. Open the main app and complete the local model setup.")
             }
         }
     }
@@ -456,7 +456,7 @@ class OverlayAssistantService : Service(), TextToSpeech.OnInitListener {
         framePaths: List<String> = emptyList()
     ) {
         val answer = StringBuilder()
-        speak("אני מנתח את התוכן…")
+        speak("Analyzing…")
         val onChunk: (String) -> Unit = { chunk ->
             answer.append(chunk)
             val partial = answer.toString()
