@@ -113,14 +113,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale("he", "IL")
-            val hebrewMale = tts?.voices?.firstOrNull { voice ->
-                voice.locale.language == "he" &&
-                    (voice.name.contains("male", ignoreCase = true) || voice.name.contains("masculine", ignoreCase = true))
-            }
-            if (hebrewMale != null) tts?.voice = hebrewMale
+            tts?.language = Locale("en", "US")
+            val englishVoice = tts?.voices?.firstOrNull { it.locale.language == "en" && it.locale.country.equals("US", true) }
+            if (englishVoice != null) tts?.voice = englishVoice
             tts?.setPitch(1.0f)
-            if (hebrewMale == null) say("לא נמצא במכשיר קול גברי עברי ייעודי. כרגע ייעשה שימוש בקול העברי המותקן.")
             tts?.setSpeechRate(0.94f)
             tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { sendBroadcast(Intent(VoiceAssistantService.ACTION_PAUSE).setPackage(packageName)) }
@@ -243,7 +239,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
             // Keep overlay startup lightweight; do not load heavy AI models here.
             startService(Intent(this, OverlayAssistantService::class.java))
-            say("הפעלתי את שירות ההאזנה המקומי. לאחר טעינת מודל הדיבור, הפקודות יתחילו במילת ההפעלה ״ארז שומע?״. אפשר לעצור דרך ההתראה.")
+            say("Voice assistant is starting. Say “Hey Erez” to wake me. I understand English and Hebrew. You can stop listening from the notification.")
         } catch (_: Exception) {
             voiceStartupRequested = false
             say("לא הצלחתי להפעיל האזנה ברקע. בדוק שהרשאת המיקרופון וההתראות מאושרות.")
@@ -311,6 +307,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private fun speak(message: String) {
         say(message)
         if (tts != null) {
+            val containsHebrew = message.any { it in '\u0590'..'\u05FF' }
+            val desiredLanguage = if (containsHebrew) Locale("he", "IL") else Locale("en", "US")
+            val languageResult = tts?.setLanguage(desiredLanguage)
+            if (languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+                tts?.setLanguage(if (containsHebrew) Locale("en", "US") else Locale("he", "IL"))
+            }
             sendBroadcast(Intent(VoiceAssistantService.ACTION_PAUSE).setPackage(packageName))
             val result = tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "erez-ai-utterance")
             if (result == TextToSpeech.ERROR) sendBroadcast(Intent(VoiceAssistantService.ACTION_RESUME).setPackage(packageName))
@@ -322,13 +324,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if (t.isEmpty()) return
         say("אתה: $t")
         when {
-            t.contains("מה אתה רואה") || t.contains("תאר את המסך") -> {
+            t.contains("מה אתה רואה") || t.contains("תאר את המסך") || t.contains("what do you see", true) || t.contains("describe the screen", true) || t.contains("show me the screen", true) -> {
                 if (!ErezAiBrain.isReady()) {
                     speak("מוח הבינה המקומי עדיין לא נטען. יש להשלים את ההורדה הראשונית.")
                 } else {
                     val snapshot = latestScreenImagePath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
                     val answer = StringBuilder()
-                    val prompt = "תאר בעברית מה מופיע במסך ומה קורה. השתמש בתמונות המסך עצמן ובטקסט שזוהה.\n" + latestScreenText.take(5000)
+                    val prompt = "Describe in clear English what is visible on the screen and what is happening. Understand and transcribe Hebrew text accurately. Use the screenshot itself and the extracted text.\\n" + latestScreenText.take(5000)
                     val onChunk: (String) -> Unit = { part -> answer.append(part) }
                     val onDone: () -> Unit = { runOnUiThread { speak(answer.toString().ifBlank { "הניתוח הסתיים." }) } }
                     val onError: (String) -> Unit = { error -> runOnUiThread { speak(error) } }
@@ -337,7 +339,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     ErezAiBrain.ask(prompt, onChunk, onDone, onError, snapshot)
                 }
             }
-            t.contains("תגובה") || t.contains("הגב") -> {
+            t.contains("תגובה") || t.contains("הגב") || t.contains("write a comment", true) || t.contains("reply", true) -> {
                 if (!ErezAiBrain.isReady()) speak("כדי לנסח תגובה, צריך לטעון קודם את מוח הבינה המקומי.")
                 else {
                     val draft = StringBuilder()
@@ -359,7 +361,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 val phone = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
                 confirmAction(ActionConfirmationActivity.TYPE_WHATSAPP, "שליחת הודעת וואטסאפ", msg, phone = phone)
             }
-            t.contains("מייל") || t.contains("אימייל") -> {
+            t.contains("מייל") || t.contains("אימייל") || t.contains("email", true) || t.contains("e-mail", true) -> {
                 val recipient = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}").find(t)?.value.orEmpty()
                 val subject = t.substringAfter("נושא", "הודעה מארז AI").substringBefore("תוכן").trim().ifBlank { "הודעה מארז AI" }
                 if (ErezAiBrain.isReady()) {
@@ -375,7 +377,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     confirmAction(ActionConfirmationActivity.TYPE_EMAIL, subject, body, recipient = recipient)
                 }
             }
-            t.contains("התקשר") || t.contains("חייג") -> {
+            t.contains("התקשר") || t.contains("חייג") || t.contains("call ", true) || t.startsWith("call", true) || t.contains("dial ", true) -> {
                 val number = Regex("\\+?[0-9][0-9\\- ]{6,}").find(t)?.value.orEmpty()
                 confirmAction(
                     ActionConfirmationActivity.TYPE_CALL,
@@ -384,11 +386,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     phone = number
                 )
             }
-            t.contains("תזכורת") || t.contains("יומן") -> {
+            t.contains("תזכורת") || t.contains("יומן") || t.contains("remind me", true) || t.contains("calendar", true) -> {
                 val title = t.substringAfter("תזכורת", t.substringAfter("יומן", t)).trim()
                 confirmAction(ActionConfirmationActivity.TYPE_CALENDAR, title.ifBlank { "תזכורת חדשה" }, "")
             }
-            t.contains("חפש") || t.contains("גוגל") || t.contains("אינטרנט") -> {
+            t.contains("חפש") || t.contains("גוגל") || t.contains("אינטרנט") || t.contains("search", true) || t.contains("google", true) || t.contains("look up", true) -> {
                 searchWeb(t.removePrefix("חפש").removePrefix(" לי").removeSuffix("באינטרנט").trim())
             }
             else -> {
