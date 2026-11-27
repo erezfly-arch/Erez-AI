@@ -301,7 +301,7 @@ class VoiceAssistantService : Service() {
                                     updateNotification("Command recognition failed: " + (e.message ?: "unknown error"))
                                 }
                             } else {
-                                updateNotification("Voice ignored: speaker did not match the enrolled profile.")
+                                updateNotification("Hey Erez standby active · voice ignored because the speaker did not match.")
                                 activeKws.reset(activeKwsStream)
                             }
                         } else if (commandMode) {
@@ -320,7 +320,7 @@ class VoiceAssistantService : Service() {
                                                 .putExtra(EXTRA_COMMAND, transcript.trim())
                                         )
                                     } else {
-                                        updateNotification("Voice ignored: speaker did not match the enrolled profile.")
+                                        updateNotification("Hey Erez standby active · voice ignored because the speaker did not match.")
                                     }
                                     commandMode = false
                                     commandDeadline = 0L
