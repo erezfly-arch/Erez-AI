@@ -298,6 +298,22 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
+        if (Build.VERSION.SDK_INT >= 23) {
+            val power = getSystemService(android.os.PowerManager::class.java)
+            val setup = getSharedPreferences("erez_setup", MODE_PRIVATE)
+            if (power != null && !power.isIgnoringBatteryOptimizations(packageName) &&
+                !setup.getBoolean("battery_optimization_prompted", false)
+            ) {
+                setup.edit().putBoolean("battery_optimization_prompted", true).apply()
+                pendingVoiceStart = true
+                try {
+                    startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+                    return
+                } catch (_: Exception) {
+                    pendingVoiceStart = false
+                }
+            }
+        }
         voiceStartupRequested = true;
         try {
             ContextCompat.startForegroundService(this, Intent(this, VoiceAssistantService::class.java))
